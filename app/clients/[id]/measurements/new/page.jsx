@@ -1,0 +1,357 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { useParams, useRouter } from "next/navigation";
+import {
+  Save,
+  ArrowLeft,
+  Ruler,
+  User,
+  Target,
+  Move,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+} from "lucide-react";
+
+// Helper to convert display names to camelCase DB fields
+const toCamelCase = (str) => {
+  return str
+    .toLowerCase()
+    .replace(/[^a-zA-Z0-9]+(.)/g, (m, chr) => chr.toUpperCase());
+};
+
+const measurementCategories = {
+  length: {
+    title: "Vertical/Length",
+    icon: Ruler,
+    measurements: [
+      "Shoulder to Chest",
+      "Shoulder to Bust",
+      "Shoulder to Underbust",
+      "Shoulder to Waist Front",
+      "Shoulder to Waist Back",
+      "Waist to Hip",
+      "Shoulder to Knee",
+      "Shoulder to Dress Length",
+      "Shoulder to Ankle",
+    ],
+  },
+  width: {
+    title: "Width",
+    icon: Ruler,
+    measurements: ["Shoulder Width", "Nipple to Nipple", "Off Shoulder"],
+  },
+  circumference: {
+    title: "Circumference",
+    icon: Target,
+    measurements: [
+      "Bust",
+      "Under Bust",
+      "Waist",
+      "Hip",
+      "Thigh",
+      "Knee",
+      "Ankle",
+      "Neck",
+    ],
+  },
+  arm: {
+    title: "Arm",
+    icon: Move,
+    measurements: [
+      "Shirt Sleeve",
+      "Elbow Length",
+      "Long Sleeves",
+      "Around Arm",
+      "Elbow",
+      "Wrist",
+    ],
+  },
+  leg: { title: "Leg", icon: User, measurements: ["In Seam", "Out Seam"] },
+};
+
+// Skeleton Loader with a placeholder for the client name
+const FormSkeleton = () => (
+  <div className="min-h-screen p-6 pt-30 animate-pulse">
+    <div className="max-w-6xl mx-auto">
+      <div className="h-6 w-36 bg-muted/50 rounded mb-8"></div>
+      <div className="glass rounded-2xl p-8 border mb-8">
+        <div className="h-8 w-64 bg-muted/50 rounded mb-3"></div>
+        <div className="h-5 w-80 bg-muted/50 rounded"></div>
+      </div>
+      <div className="glass rounded-xl p-6 border mb-8 h-32"></div>
+      <div className="space-y-6">
+        <div className="glass rounded-xl border h-20"></div>
+        <div className="glass rounded-xl border h-20"></div>
+      </div>
+    </div>
+  </div>
+);
+
+export default function MeasurementFormPage() {
+  const { id: clientId, sessionId } = useParams();
+  const router = useRouter();
+
+  const isEditMode = !!sessionId;
+
+  // State for the form data
+  const [clientName, setClientName] = useState("");
+  const [measurements, setMeasurements] = useState({});
+  const [notes, setNotes] = useState("");
+
+  // State for UI and interactions
+  const [expandedCategories, setExpandedCategories] = useState({
+    length: true,
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        // Create an array of promises to fetch data in parallel
+        const fetches = [fetch(`/api/clients/${clientId}`)];
+        if (isEditMode) {
+          fetches.push(
+            fetch(`/api/clients/${clientId}/measurements/${sessionId}`)
+          );
+        }
+
+        const [clientRes, sessionRes] = await Promise.all(fetches);
+
+        // Process client response (always fetched)
+        if (!clientRes.ok) throw new Error("Failed to load client details.");
+        const clientData = await clientRes.json();
+        setClientName(clientData.name);
+
+        // Process session response (only in edit mode)
+        if (isEditMode) {
+          if (!sessionRes.ok) throw new Error("Failed to load session data.");
+          const sessionData = await sessionRes.json();
+          setMeasurements(sessionData || {});
+          setNotes(sessionData.notes || "");
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, [clientId, sessionId, isEditMode]);
+
+  const handleMeasurementChange = (fieldName, type, value) => {
+    const key = `${fieldName}${type.charAt(0).toUpperCase() + type.slice(1)}`;
+    setMeasurements((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const toggleCategory = (category) =>
+    setExpandedCategories((prev) => ({ ...prev, [category]: !prev[category] }));
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setError(null);
+    const url = isEditMode
+      ? `/api/clients/${clientId}/measurements/${sessionId}`
+      : `/api/clients/${clientId}/measurements`;
+    const method = isEditMode ? "PUT" : "POST";
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes, measurements }),
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to save measurements.");
+      }
+      router.push(`/clients/${clientId}`);
+      router.refresh(); // Important to refresh the client page to show new data
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isLoading) return <FormSkeleton />;
+
+  return (
+    <div className="min-h-screen p-6 pt-30">
+      <motion.div
+        initial="hidden"
+        animate="visible"
+        className="max-w-6xl mx-auto"
+      >
+        <motion.div className="mb-8">
+          <button
+            onClick={() => router.back()}
+            className="mb-4 text-muted-foreground hover:text-foreground transition-colors flex items-center space-x-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back</span>
+          </button>
+          <div className="glass rounded-2xl p-8 border">
+            <h1 className="text-3xl font-bold gradient-text mb-2">
+              {isEditMode ? "Edit Measurements" : "New Measurement Session"}
+            </h1>
+            <p className="text-muted-foreground">
+              For client:{" "}
+              <span className="font-semibold text-foreground">
+                {clientName}
+              </span>
+            </p>
+          </div>
+        </motion.div>
+
+        <motion.div className="mb-8">
+          <div className="glass rounded-xl p-6 border">
+            <label className="block text-sm font-medium mb-2">
+              Session Notes
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add notes about this session (e.g., fabric type, client preferences)..."
+              className="w-full h-24 bg-background/50 border border-border rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+        </motion.div>
+
+        <div className="space-y-6">
+          {Object.entries(measurementCategories).map(
+            ([categoryKey, category]) => (
+              <div
+                key={categoryKey}
+                className="glass rounded-xl border overflow-hidden"
+              >
+                <button
+                  onClick={() => toggleCategory(categoryKey)}
+                  className="w-full p-4 flex items-center justify-between hover:bg-accent/50 transition-colors"
+                >
+                  <div className="flex items-center space-x-3">
+                    <category.icon className="w-5 h-5 text-primary" />
+                    <h2 className="text-lg font-semibold">{category.title}</h2>
+                  </div>
+                  {expandedCategories[categoryKey] ? (
+                    <ChevronUp className="w-5 h-5" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5" />
+                  )}
+                </button>
+                <motion.div
+                  initial={false}
+                  animate={{
+                    height: expandedCategories[categoryKey] ? "auto" : 0,
+                    opacity: expandedCategories[categoryKey] ? 1 : 0,
+                  }}
+                  className="overflow-hidden"
+                >
+                  <div className="p-6 pt-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[600px]">
+                        <thead>
+                          <tr className="border-b border-border/50">
+                            <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">
+                              Measurement
+                            </th>
+                            <th className="text-center py-3 px-2 text-sm font-medium text-muted-foreground">
+                              Snug (in)
+                            </th>
+                            <th className="text-center py-3 px-2 text-sm font-medium text-muted-foreground">
+                              Static (in)
+                            </th>
+                            <th className="text-center py-3 px-2 text-sm font-medium text-muted-foreground">
+                              Dynamic (in)
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {category.measurements.map((name, index) => {
+                            const fieldName = toCamelCase(name);
+                            return (
+                              <tr
+                                key={name}
+                                className="border-b border-border/30"
+                              >
+                                <td className="py-3 px-2 font-medium text-sm">
+                                  {name}
+                                </td>
+                                {["snug", "static", "dynamic"].map((type) => (
+                                  <td
+                                    key={type}
+                                    className="py-3 px-2 text-center"
+                                  >
+                                    <input
+                                      type="number"
+                                      step="0.1"
+                                      value={
+                                        measurements[
+                                          `${fieldName}${
+                                            type.charAt(0).toUpperCase() +
+                                            type.slice(1)
+                                          }`
+                                        ] || ""
+                                      }
+                                      onChange={(e) =>
+                                        handleMeasurementChange(
+                                          fieldName,
+                                          type,
+                                          e.target.value
+                                        )
+                                      }
+                                      className="w-full max-w-[80px] mx-auto bg-background/50 border border-border/50 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary"
+                                    />
+                                  </td>
+                                ))}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            )
+          )}
+        </div>
+
+        <div className="mt-8 flex flex-col sm:flex-row justify-end items-center gap-4">
+          {error && (
+            <div className="text-destructive text-sm flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              {error}
+            </div>
+          )}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleSave}
+            disabled={isSaving || isLoading}
+            className="bg-primary text-primary-foreground w-full sm:w-auto px-8 py-3 rounded-xl flex items-center justify-center space-x-2 disabled:opacity-50"
+          >
+            {isSaving ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            ) : (
+              <Save className="w-5 h-5" />
+            )}
+            <span>
+              {isSaving
+                ? "Saving..."
+                : isEditMode
+                ? "Update Session"
+                : "Save Session"}
+            </span>
+          </motion.button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
