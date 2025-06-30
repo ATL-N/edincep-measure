@@ -139,7 +139,7 @@ export default function ClientsPage() {
   };
 
   return (
-    <div className="min-h-screen pt-20 pb-10 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen pt-30 pb-10 px-4 sm:px-6 lg:px-8">
       <motion.div
         className="max-w-7xl mx-auto"
         initial="hidden"
@@ -382,7 +382,7 @@ export default function ClientsPage() {
 
         {/* Floating Action Button */}
         <motion.div
-          className="fixed bottom-6 right-6 z-40"
+          className="fixed bottom-26 sm:bottom-6 right-6 z-40"
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{
