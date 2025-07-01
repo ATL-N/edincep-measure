@@ -7,7 +7,7 @@ import {
   PlusIcon,
   ChartBarIcon,
   CalendarIcon,
-  TrendingUpIcon,
+  ArrowTrendingUpIcon,
   ClockIcon,
   ArrowRightIcon,
   EyeIcon,
@@ -40,7 +40,7 @@ const stats = [
     name: "Active Projects",
     value: "15",
     change: "+3%",
-    icon: TrendingUpIcon,
+    icon: ArrowTrendingUpIcon,
     color: "text-orange-500",
   },
 ];
@@ -149,7 +149,7 @@ export default function Dashboard() {
             Welcome back! ✨
           </h1>
           <p className="text-muted-foreground text-lg">
-            Here's what's happening with your fashion business today.
+            {"Here's what's happening with your fashion business today."}
           </p>
         </motion.div>
 
