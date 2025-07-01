@@ -29,9 +29,10 @@ services:
     depends_on:
       edincepmeasurehost:
         condition: service_healthy
+      prisma-migrate:
+        condition: service_completed_successfully
     restart: always
     networks:
-      # - web
       - traefik-public
     healthcheck:
       test: ["CMD", "wget", "--spider", "http://localhost:3007/api/health"]
@@ -39,6 +40,33 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # Prisma migration and seeding service
+  prisma-migrate:
+    image: edincep-measure-nextjs:${VERSION:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+     - .env
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=${DB_HOST}
+    depends_on:
+      edincepmeasurehost:
+        condition: service_healthy
+    command: >
+      sh -c "
+        echo 'Running Prisma migrations...' &&
+        npx prisma migrate deploy &&
+        echo 'Migrations completed. Running seed...' &&
+        npx prisma db seed &&
+        echo 'Database initialization completed!'
+      "
+    networks:
+      - traefik-public
+    restart: "no"
+
   edincepmeasurehost:
     image: postgres:15-alpine
     ports:
@@ -63,11 +91,11 @@ services:
       - "postgres"
       - "-c"
       - "ssl=off"
+
 volumes:
   postgres-data-edincep-measure:
     driver: local
+
 networks:
-  # web:
-  #   external: true
   traefik-public:
     external: true
