@@ -195,7 +195,15 @@ export async function GET(request, { params }) {
 
     const session = await prisma.measurement.findUnique({
       where: { id: sessionId, clientId: clientId }, // Ensure session belongs to the client
-      include: { client: { select: { name: true } } },
+      include: {
+        client: {
+          select: {
+            name: true,
+            phone: true, // Explicitly select phone
+            email: true,
+          },
+        },
+      },
     });
 
     if (!session) {

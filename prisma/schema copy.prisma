@@ -1,0 +1,166 @@
+// // This is your Prisma schema file,
+// // learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// generator client {
+//   provider = "prisma-client-js"
+// }
+
+// datasource db {
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL")
+// }
+
+// // Add this enum for the client status
+// enum ClientStatus {
+//   Active
+//   Inactive
+// }
+
+// model Client {
+//   id           String       @id @default(cuid())
+//   name         String
+//   phone        String?
+//   email        String?
+//   address      String?
+//   dateOfBirth  DateTime? // <-- ADD THIS FIELD
+//   notes        String?
+//   status       ClientStatus @default(Active)
+//   createdAt    DateTime     @default(now())
+//   updatedAt    DateTime     @updatedAt
+
+//   measurements Measurement[]
+  
+//   // Add an index for the name field to improve search performance
+//   @@index([name])
+//   @@map("clients")
+// }
+
+// model Measurement {
+//   id        String   @id @default(cuid())
+//   clientId  String
+//   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+//   // Vertical measurements (shoulder to various points) - Snug, Static, Dynamic
+//   shoulderToChestSnug      Float?
+//   shoulderToChestStatic    Float?
+//   shoulderToChestDynamic   Float?
+  
+//   shoulderToBustSnug       Float?
+//   shoulderToBustStatic     Float?
+//   shoulderToBustDynamic    Float?
+  
+//   shoulderToUnderbustSnug  Float?
+//   shoulderToUnderbustStatic Float?
+//   shoulderToUnderbustDynamic Float?
+  
+//   shoulderToWaistFrontSnug Float?
+//   shoulderToWaistFrontStatic Float?
+//   shoulderToWaistFrontDynamic Float?
+  
+//   shoulderToWaistBackSnug  Float?
+//   shoulderToWaistBackStatic Float?
+//   shoulderToWaistBackDynamic Float?
+  
+//   waistToHipSnug          Float?
+//   waistToHipStatic        Float?
+//   waistToHipDynamic       Float?
+  
+//   shoulderToKneeSnug      Float?
+//   shoulderToKneeStatic    Float?
+//   shoulderToKneeDynamic   Float?
+  
+//   shoulderToDressLengthSnug Float?
+//   shoulderToDressLengthStatic Float?
+//   shoulderToDressLengthDynamic Float?
+  
+//   shoulderToAnkleSnug     Float?
+//   shoulderToAnkleStatic   Float?
+//   shoulderToAnkleDynamic  Float?
+  
+//   // Width measurements - Snug, Static, Dynamic
+//   shoulderWidthSnug       Float?
+//   shoulderWidthStatic     Float?
+//   shoulderWidthDynamic    Float?
+  
+//   nippleToNippleSnug      Float?
+//   nippleToNippleStatic    Float?
+//   nippleToNippleDynamic   Float?
+  
+//   offShoulderSnug         Float?
+//   offShoulderStatic       Float?
+//   offShoulderDynamic      Float?
+  
+//   // Circumference measurements - Snug, Static, Dynamic
+//   bustSnug                Float?
+//   bustStatic              Float?
+//   bustDynamic             Float?
+  
+//   underBustSnug           Float?
+//   underBustStatic         Float?
+//   underBustDynamic        Float?
+  
+//   waistSnug               Float?
+//   waistStatic             Float?
+//   waistDynamic            Float?
+  
+//   hipSnug                 Float?
+//   hipStatic               Float?
+//   hipDynamic              Float?
+  
+//   thighSnug               Float?
+//   thighStatic             Float?
+//   thighDynamic            Float?
+  
+//   kneeSnug                Float?
+//   kneeStatic              Float?
+//   kneeDynamic             Float?
+  
+//   ankleSnug               Float?
+//   ankleStatic             Float?
+//   ankleDynamic            Float?
+  
+//   neckSnug                Float?
+//   neckStatic              Float?
+//   neckDynamic             Float?
+  
+//   // Arm measurements - Snug, Static, Dynamic
+//   shirtSleeveSnug         Float?
+//   shirtSleeveStatic       Float?
+//   shirtSleeveDynamic      Float?
+  
+//   elbowLengthSnug         Float?
+//   elbowLengthStatic       Float?
+//   elbowLengthDynamic      Float?
+  
+//   longSleevesSnug         Float?
+//   longSleevesStatic       Float?
+//   longSleevesDynamic      Float?
+  
+//   aroundArmSnug           Float?
+//   aroundArmStatic         Float?
+//   aroundArmDynamic        Float?
+  
+//   elbowSnug               Float?
+//   elbowStatic             Float?
+//   elbowDynamic            Float?
+  
+//   wristSnug               Float?
+//   wristStatic             Float?
+//   wristDynamic            Float?
+  
+//   // Leg measurements - Snug, Static, Dynamic
+//   inSeamSnug              Float?
+//   inSeamStatic            Float?
+//   inSeamDynamic           Float?
+  
+//   outSeamSnug             Float?
+//   outSeamStatic           Float?
+//   outSeamDynamic          Float?
+  
+//   // Session info
+//   notes               String?
+//   createdAt           DateTime @default(now())
+//   updatedAt           DateTime @updatedAt
+  
+//   @@map("measurements")
+// }

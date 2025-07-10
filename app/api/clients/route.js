@@ -1,20 +1,40 @@
+// app/api/clients/route.js
+
 import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/session";
 
 const prisma = new PrismaClient();
 
-// GET all clients (no changes needed here)
+// GET all clients for the LOGGED-IN DESIGNER
 export async function GET(request) {
   try {
+    // 1. Authenticate the user using the session helper
+    const user = await getCurrentUser(request);
+
+    console.log("User from session:", user);
+
+    // 2. Authorize the user: check if they are logged in and have the correct role
+    if (!user || user.role !== "DESIGNER") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const designerId = user.id;
+
+    // 3. Get query parameters for filtering and pagination
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
-    const status = searchParams.get("status"); // 'Active' or 'Inactive'
-    const sortBy = searchParams.get("sort"); // 'name', 'recent', 'measurements'
+    const status = searchParams.get("status");
+    const sortBy = searchParams.get("sort");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "12");
     const offset = (page - 1) * limit;
 
-    const where = {};
+    // 4. Build the 'where' clause, starting with the mandatory designerId
+    const where = {
+      designerId: designerId, // This is the core of multi-tenancy
+    };
+
+    // Add search filters if provided
     if (search) {
       where.OR = [
         { name: { contains: search, mode: "insensitive" } },
@@ -22,10 +42,13 @@ export async function GET(request) {
         { email: { contains: search, mode: "insensitive" } },
       ];
     }
+
+    // Add status filter if provided
     if (status && status !== "All") {
       where.status = status;
     }
 
+    // 5. Build the 'orderBy' clause
     let orderBy = {};
     switch (sortBy) {
       case "name":
@@ -40,6 +63,7 @@ export async function GET(request) {
         break;
     }
 
+    // 6. Execute the database query with the secured 'where' clause
     const [clients, total] = await Promise.all([
       prisma.client.findMany({
         where,
@@ -59,6 +83,7 @@ export async function GET(request) {
       prisma.client.count({ where }),
     ]);
 
+    // 7. Return the successful response
     return NextResponse.json({
       clients,
       pagination: {
@@ -77,9 +102,21 @@ export async function GET(request) {
   }
 }
 
-// POST new client (MODIFIED)
+// POST a new client for the LOGGED-IN DESIGNER
 export async function POST(request) {
   try {
+    // 1. Authenticate the user using the session helper
+    const user = await getCurrentUser(request);
+
+    console.log("User from session in POST:", user);
+
+    // 2. Authorize the user
+    if (!user || user.role !== "DESIGNER") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const designerId = user.id;
+
+    // 3. Get the request body
     const body = await request.json();
     const {
       firstName,
@@ -92,8 +129,8 @@ export async function POST(request) {
       status,
     } = body;
 
+    // 4. Validate required fields
     const name = `${firstName || ""} ${lastName || ""}`.trim();
-
     if (!name) {
       return NextResponse.json(
         { error: "First and last name are required." },
@@ -107,26 +144,28 @@ export async function POST(request) {
       );
     }
 
+    // 5. Create the new client, ensuring the designerId is set
     const client = await prisma.client.create({
       data: {
         name,
         phone,
         email,
         address,
-        // Handle dateOfBirth: convert to Date object if provided, otherwise null
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
         notes,
         status: status || "Active",
+        designerId: designerId, // Assign the client to the logged-in designer
       },
     });
 
+    // 6. Return the newly created client
     return NextResponse.json(client, { status: 201 });
   } catch (error) {
     console.error("Error creating client:", error);
-    // Provide a more specific error for unique constraint violations if needed
     if (error.code === "P2002") {
+      // Handle cases where a unique field (like email, if you set it to unique) already exists
       return NextResponse.json(
-        { error: `A client with this information already exists.` },
+        { error: `A client with this information might already exist.` },
         { status: 409 }
       );
     }

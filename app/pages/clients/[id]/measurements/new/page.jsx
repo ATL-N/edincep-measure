@@ -72,9 +72,9 @@ const measurementCategories = {
   leg: { title: "Leg", icon: User, measurements: ["In Seam", "Out Seam"] },
 };
 
-// Skeleton Loader with a placeholder for the client name
+// Skeleton Loader for the form page
 const FormSkeleton = () => (
-  <div className="min-h-screen p-6 pt-30 animate-pulse">
+  <div className="min-h-screen p-6 pt-10 animate-pulse">
     <div className="max-w-6xl mx-auto">
       <div className="h-6 w-36 bg-muted/50 rounded mb-8"></div>
       <div className="glass rounded-2xl p-8 border mb-8">
@@ -85,6 +85,7 @@ const FormSkeleton = () => (
       <div className="space-y-6">
         <div className="glass rounded-xl border h-20"></div>
         <div className="glass rounded-xl border h-20"></div>
+        <div className="glass rounded-xl border h-20"></div>
       </div>
     </div>
   </div>
@@ -93,15 +94,15 @@ const FormSkeleton = () => (
 export default function MeasurementFormPage() {
   const { id: clientId, sessionId } = useParams();
   const router = useRouter();
-
   const isEditMode = !!sessionId;
 
-  // State for the form data
+  // State for data
   const [clientName, setClientName] = useState("");
   const [measurements, setMeasurements] = useState({});
   const [notes, setNotes] = useState("");
+  const [lastMeasurements, setLastMeasurements] = useState({});
 
-  // State for UI and interactions
+  // UI State
   const [expandedCategories, setExpandedCategories] = useState({
     length: true,
   });
@@ -114,27 +115,36 @@ export default function MeasurementFormPage() {
       setIsLoading(true);
       setError(null);
       try {
-        // Create an array of promises to fetch data in parallel
-        const fetches = [fetch(`/api/clients/${clientId}`)];
         if (isEditMode) {
-          fetches.push(
-            fetch(`/api/clients/${clientId}/measurements/${sessionId}`)
-          );
-        }
+          // --- EDIT MODE ---
+          // Fetch the specific session we want to edit
+          const [clientRes, sessionRes] = await Promise.all([
+            fetch(`/api/clients/${clientId}`),
+            fetch(`/api/clients/${clientId}/measurements/${sessionId}`),
+          ]);
 
-        const [clientRes, sessionRes] = await Promise.all(fetches);
-
-        // Process client response (always fetched)
-        if (!clientRes.ok) throw new Error("Failed to load client details.");
-        const clientData = await clientRes.json();
-        setClientName(clientData.name);
-
-        // Process session response (only in edit mode)
-        if (isEditMode) {
+          if (!clientRes.ok) throw new Error("Failed to load client details.");
           if (!sessionRes.ok) throw new Error("Failed to load session data.");
+
+          const clientData = await clientRes.json();
           const sessionData = await sessionRes.json();
+
+          setClientName(clientData.name);
           setMeasurements(sessionData || {});
           setNotes(sessionData.notes || "");
+        } else {
+          // --- NEW SESSION MODE (UPDATED LOGIC) ---
+          // Fetch the client, which now includes their *full* measurement history
+          const res = await fetch(`/api/clients/${clientId}`);
+          if (!res.ok) throw new Error("Failed to load client details.");
+
+          const clientData = await res.json();
+          setClientName(clientData.name);
+
+          // Since the API sorts measurements `desc`, the first one is the latest.
+          if (clientData.measurements && clientData.measurements.length > 0) {
+            setLastMeasurements(clientData.measurements[0]);
+          }
         }
       } catch (err) {
         setError(err.message);
@@ -150,8 +160,9 @@ export default function MeasurementFormPage() {
     setMeasurements((prev) => ({ ...prev, [key]: value }));
   };
 
-  const toggleCategory = (category) =>
+  const toggleCategory = (category) => {
     setExpandedCategories((prev) => ({ ...prev, [category]: !prev[category] }));
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -161,18 +172,23 @@ export default function MeasurementFormPage() {
       : `/api/clients/${clientId}/measurements`;
     const method = isEditMode ? "PUT" : "POST";
 
+    // This logic correctly merges new values over the old ones for a new session.
+    const finalMeasurements = isEditMode
+      ? measurements
+      : { ...lastMeasurements, ...measurements };
+
     try {
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notes, measurements }),
+        body: JSON.stringify({ notes, measurements: finalMeasurements }),
       });
       if (!response.ok) {
         const errData = await response.json();
         throw new Error(errData.error || "Failed to save measurements.");
       }
-      router.push(`/clients/${clientId}`);
-      router.refresh(); // Important to refresh the client page to show new data
+      router.push(`/pages/clients/${clientId}`);
+      router.refresh();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -183,7 +199,7 @@ export default function MeasurementFormPage() {
   if (isLoading) return <FormSkeleton />;
 
   return (
-    <div className="min-h-screen p-6 pt-30">
+    <div className="min-h-screen pt-0 md:pt-30 pb-10 mb-24 px-4 sm:px-6 lg:px-8">
       <motion.div
         initial="hidden"
         animate="visible"
@@ -273,43 +289,47 @@ export default function MeasurementFormPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {category.measurements.map((name, index) => {
+                          {category.measurements.map((name) => {
                             const fieldName = toCamelCase(name);
                             return (
                               <tr
                                 key={name}
-                                className="border-b border-border/30"
+                                className="border-b border-border/30 last:border-b-0"
                               >
                                 <td className="py-3 px-2 font-medium text-sm">
                                   {name}
                                 </td>
-                                {["snug", "static", "dynamic"].map((type) => (
-                                  <td
-                                    key={type}
-                                    className="py-3 px-2 text-center"
-                                  >
-                                    <input
-                                      type="number"
-                                      step="0.1"
-                                      value={
-                                        measurements[
-                                          `${fieldName}${
-                                            type.charAt(0).toUpperCase() +
-                                            type.slice(1)
-                                          }`
-                                        ] || ""
-                                      }
-                                      onChange={(e) =>
-                                        handleMeasurementChange(
-                                          fieldName,
-                                          type,
-                                          e.target.value
-                                        )
-                                      }
-                                      className="w-full max-w-[80px] mx-auto bg-background/50 border border-border/50 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary"
-                                    />
-                                  </td>
-                                ))}
+                                {["snug", "static", "dynamic"].map((type) => {
+                                  const fullFieldName = `${fieldName}${
+                                    type.charAt(0).toUpperCase() + type.slice(1)
+                                  }`;
+                                  return (
+                                    <td
+                                      key={type}
+                                      className="py-3 px-2 text-center"
+                                    >
+                                      <input
+                                        type="number"
+                                        step="0.1"
+                                        value={
+                                          measurements[fullFieldName] || ""
+                                        }
+                                        placeholder={String(
+                                          lastMeasurements[fullFieldName] ||
+                                            "0.0"
+                                        )}
+                                        onChange={(e) =>
+                                          handleMeasurementChange(
+                                            fieldName,
+                                            type,
+                                            e.target.value
+                                          )
+                                        }
+                                        className="w-full max-w-[80px] mx-auto bg-background/50 border border-border/50 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/40"
+                                      />
+                                    </td>
+                                  );
+                                })}
                               </tr>
                             );
                           })}

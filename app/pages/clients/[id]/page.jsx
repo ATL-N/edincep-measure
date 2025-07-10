@@ -126,7 +126,7 @@ export default function ClientProfilePage() {
   );
 
   return (
-    <div className="min-h-screen p-6 pt-30">
+    <div className="min-h-screen pt-0 md:pt-30 pb-10 mb-24 px-4 sm:px-6 lg:px-8">
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -175,7 +175,7 @@ export default function ClientProfilePage() {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => router.push(`/clients/${id}/measurements/new`)}
+                  onClick={() => router.push(`/pages/clients/${id}/measurements/new`)}
                   className="bg-primary text-primary-foreground px-6 py-3 rounded-xl flex items-center space-x-2 hover:bg-primary/90 transition-colors"
                 >
                   <Plus className="w-5 h-5" />
@@ -244,13 +244,16 @@ export default function ClientProfilePage() {
           variants={itemVariants}
           className="glass rounded-2xl p-8 border"
         >
-          <div className="flex items-center justify-between mb-6" title='View all client measurements'>
+          <div
+            className="flex items-center justify-between mb-6"
+            title="View all client measurements"
+          >
             <h2 className="text-2xl font-bold">Measurement History</h2>
             {client.measurements.length > 0 && (
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => router.push(`/clients/${id}/measurements`)}
+                onClick={() => router.push(`/pages/clients/${id}/measurements`)}
                 className="text-primary hover:text-primary/80 transition-colors"
               >
                 View All
@@ -267,7 +270,7 @@ export default function ClientProfilePage() {
                   transition={{ delay: index * 0.1 }}
                   className="border border-border rounded-xl p-6 hover:bg-accent/50 transition-colors cursor-pointer card-3d"
                   onClick={() =>
-                    router.push(`/clients/${id}/measurements/${session.id}`)
+                    router.push(`/pages/clients/${id}/measurements/${session.id}`)
                   }
                 >
                   <div className="flex items-center justify-between">
@@ -303,7 +306,7 @@ export default function ClientProfilePage() {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => router.push(`/clients/${id}/measurements/new`)}
+                  onClick={() => router.push(`/pages/clients/${id}/measurements/new`)}
                   className="bg-primary text-primary-foreground px-6 py-3 rounded-xl hover:bg-primary/90 transition-colors"
                 >
                   Take First Measurements

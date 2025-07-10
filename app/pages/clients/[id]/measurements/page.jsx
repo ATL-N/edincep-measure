@@ -69,7 +69,7 @@ export default function MeasurementHistoryPage() {
     try {
       const params = new URLSearchParams({ search: debouncedSearchQuery });
       const response = await fetch(
-        `/api/clients/${id}/measurements?${params.toString()}`
+        `/api/pages/clients/${id}/measurements?${params.toString()}`
       );
 
       if (!response.ok) {
@@ -170,7 +170,7 @@ export default function MeasurementHistoryPage() {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => router.push(`/clients/${id}/measurements/new`)}
+                onClick={() => router.push(`/pages/pages/clients/${id}/measurements/new`)}
                 className="bg-primary text-primary-foreground px-6 py-3 rounded-xl flex items-center space-x-2 hover:bg-primary/90 transition-colors"
               >
                 <Plus className="w-5 h-5" />
@@ -210,7 +210,7 @@ export default function MeasurementHistoryPage() {
                 transition={{ delay: index * 0.1 }}
                 className="glass rounded-xl border p-6 hover:bg-accent/50 transition-colors cursor-pointer card-3d"
                 onClick={() =>
-                  router.push(`/clients/${id}/measurements/${session.id}`)
+                  router.push(`/pages/clients/${id}/measurements/${session.id}`)
                 }
               >
                 <div className="flex items-start justify-between mb-4">
@@ -294,7 +294,7 @@ export default function MeasurementHistoryPage() {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => router.push(`/clients/${id}/measurements/new`)}
+                  onClick={() => router.push(`/pages/clients/${id}/measurements/new`)}
                   className="bg-primary text-primary-foreground px-6 py-3 rounded-xl hover:bg-primary/90 transition-colors"
                 >
                   Take First Measurements

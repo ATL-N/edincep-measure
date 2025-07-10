@@ -10,7 +10,90 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Add this enum for the client status
+// ---------------------------------
+// --- NEW: USER & AUTH MODELS ---
+// ---------------------------------
+
+// Defines the user roles for the entire application.
+enum Role {
+  CLIENT    // A customer who has an account to view their measurements.
+  DESIGNER  // A fashion designer who manages clients and takes measurements.
+  ADMIN     // A super admin who can oversee the entire system.
+}
+
+// The core User model for anyone who logs into the system.
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(CLIENT) // New users default to the CLIENT role.
+  hashedPassword String?  // For email/password authentication
+  // --- Auth.js relations ---
+  accounts      Account[]
+  sessions      Session[]
+
+  // --- Application-specific relations ---
+  // If the user IS a client, this links to their client profile.
+  clientProfile         Client?              @relation("ClientUser")
+  
+  // If the user IS a designer, this lists all clients they manage.
+  clientsAsDesigner     Client[]             @relation("DesignerClients")
+  
+  // A list of all measurement sessions created by this user (for auditing).
+  createdMeasurements   Measurement[]
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+// Model for linking OAuth accounts (e.g., Google) to a User.
+// Required by Auth.js Prisma adapter.
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// Model for managing user login sessions.
+// Required by Auth.js Prisma adapter.
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Model for "magic link" email sign-ins.
+// Required by Auth.js Prisma adapter.
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+
+// ------------------------------------
+// --- UPDATED APPLICATION MODELS ---
+// ------------------------------------
+
 enum ClientStatus {
   Active
   Inactive
@@ -20,25 +103,43 @@ model Client {
   id           String       @id @default(cuid())
   name         String
   phone        String?
-  email        String?
+  email        String?      // Kept for clients who are not platform users.
   address      String?
-  dateOfBirth  DateTime? // <-- ADD THIS FIELD
+  dateOfBirth  DateTime?
   notes        String?
   status       ClientStatus @default(Active)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
+  // --- NEW: User Relationships ---
+  // The designer who manages this client.
+  designerId   String
+  designer     User         @relation("DesignerClients", fields: [designerId], references: [id], onDelete: Restrict)
+
+  // If the client is also a user on the platform, this links to their User account.
+  // This is optional and unique.
+  userId       String?      @unique
+  user         User?        @relation("ClientUser", fields: [userId], references: [id], onDelete: SetNull)
+  
+  // --- Existing Relationship ---
   measurements Measurement[]
   
-  // Add an index for the name field to improve search performance
   @@index([name])
+  @@index([designerId]) // Add index for faster lookups by designer.
   @@map("clients")
 }
 
 model Measurement {
   id        String   @id @default(cuid())
+  
+  // --- Existing Relationship ---
   clientId  String
   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // --- NEW: User Relationship ---
+  // Tracks which designer/user created this measurement session. Crucial for auditing.
+  creatorId String
+  creator   User     @relation(fields: [creatorId], references: [id], onDelete: Restrict)
   
   // Vertical measurements (shoulder to various points) - Snug, Static, Dynamic
   shoulderToChestSnug      Float?
@@ -162,5 +263,6 @@ model Measurement {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   
+  @@index([creatorId]) // Add index for faster lookups by creator.
   @@map("measurements")
 }

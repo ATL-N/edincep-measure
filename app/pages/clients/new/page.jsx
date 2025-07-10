@@ -21,10 +21,7 @@ const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: {
-      delayChildren: 0.1,
-      staggerChildren: 0.05,
-    },
+    transition: { delayChildren: 0.1, staggerChildren: 0.05 },
   },
 };
 
@@ -33,11 +30,7 @@ const itemVariants = {
   visible: {
     y: 0,
     opacity: 1,
-    transition: {
-      type: "spring",
-      damping: 12,
-      stiffness: 200,
-    },
+    transition: { type: "spring", damping: 12, stiffness: 200 },
   },
 };
 
@@ -110,10 +103,7 @@ export default function AddClient() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
@@ -136,6 +126,7 @@ export default function AddClient() {
     return Object.keys(newErrors).length === 0;
   };
 
+  // --- THIS FUNCTION HAS BEEN MODIFIED ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError("");
@@ -147,24 +138,41 @@ export default function AddClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
+        // ** THIS IS THE FIX **
+        // This line tells the browser to include the authentication cookie
+        // with this API request. Without it, the request is anonymous.
+        credentials: "include",
       });
+
+      // Now, we can properly handle the 401 Unauthorized error from the API
+      if (response.status === 401) {
+        setSubmitError(
+          "You are not authorized to perform this action. Please log in again."
+        );
+        // Optionally, redirect to login page after a delay
+        // setTimeout(() => router.push('/login'), 3000);
+        return; // Stop execution
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
+        // Use the specific error message from the API
         setSubmitError(errorData.error || "An unexpected error occurred.");
-        throw new Error(errorData.error || `Server error: ${response.status}`);
+        return; // Stop execution
       }
 
+      // If everything was successful
       setShowSuccess(true);
+      router.refresh(); // Tell Next.js to refetch data on other pages
       setTimeout(() => {
-        router.push("/clients");
-        router.refresh(); // Force a data refresh on the clients page
+        router.push("/pages/clients"); // Redirect to the client list
       }, 1500);
     } catch (error) {
-      console.error("Error adding client:", error);
-      if (!submitError) {
-        setSubmitError("Network error. Please check your connection.");
-      }
+      console.error("Fetch error:", error);
+      // This catch block handles network errors (e.g., no internet connection)
+      setSubmitError(
+        "Network error. Please check your connection and try again."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -196,7 +204,7 @@ export default function AddClient() {
   }
 
   return (
-    <div className="min-h-screen pt-30 pb-10 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen pt-20 pb-24 px-4 sm:px-6 lg:px-8">
       <motion.div
         className="max-w-2xl mx-auto"
         variants={containerVariants}
@@ -205,7 +213,7 @@ export default function AddClient() {
       >
         <motion.div className="mb-8" variants={itemVariants}>
           <Link
-            href="/clients"
+            href="/pages/clients"
             className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors mb-4"
           >
             <ArrowLeftIcon className="w-4 h-4 mr-2" />
@@ -301,7 +309,7 @@ export default function AddClient() {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-xl flex items-center text-sm"
+                className="bg-destructive/10 border border-destructive/30 text-destructive p-3 rounded-xl flex items-center text-sm"
               >
                 <ExclamationTriangleIcon className="w-5 h-5 mr-3 flex-shrink-0" />
                 {submitError}
@@ -313,7 +321,7 @@ export default function AddClient() {
               variants={itemVariants}
             >
               <Link
-                href="/clients"
+                href="/pages/clients"
                 className="px-6 py-3 border border-border rounded-xl text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all duration-200"
               >
                 Cancel

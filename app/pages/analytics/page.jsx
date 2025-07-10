@@ -158,7 +158,7 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="min-h-screen pt-30 pb-10 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen pt-0 md:pt-30 pb-10 mb-24 px-4 sm:px-6 lg:px-8">
       <motion.div
         className="max-w-7xl mx-auto"
         variants={containerVariants}

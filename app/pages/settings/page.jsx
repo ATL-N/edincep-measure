@@ -18,7 +18,7 @@ import {
   Sun,
   Monitor,
 } from "lucide-react";
-import { useTheme } from "../components/ThemeProvider"; // Assuming this path is correct
+import { useTheme } from "../../components/ThemeProvider"; // Assuming this path is correct
 
 export default function Settings() {
   const router = useRouter();

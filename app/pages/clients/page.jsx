@@ -139,7 +139,7 @@ export default function ClientsPage() {
   };
 
   return (
-    <div className="min-h-screen pt-30 pb-10 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen pt-0 md:pt-30 pb-10 mb-24 px-4 sm:px-6 lg:px-8">
       <motion.div
         className="max-w-7xl mx-auto"
         initial="hidden"
@@ -157,7 +157,7 @@ export default function ClientsPage() {
                 Manage your client database and measurements
               </p>
             </div>
-            <Link href="/clients/new">
+            <Link href="/pages/clients/new">
               <motion.button
                 className="mt-4 sm:mt-0 px-6 py-3 rounded-xl gradient-bg text-white font-medium flex items-center space-x-2 shadow-lg"
                 whileHover={{ scale: 1.02 }}
@@ -277,7 +277,7 @@ export default function ClientsPage() {
                       transition: { type: "spring", stiffness: 300 },
                     }}
                   >
-                    <Link href={`/clients/${client.id}`}>
+                    <Link href={`/pages/clients/${client.id}`}>
                       {/* Client card content remains the same */}
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
@@ -366,7 +366,7 @@ export default function ClientsPage() {
                 <p className="text-muted-foreground mb-6">
                   Try adjusting your search or filter criteria.
                 </p>
-                <Link href="/clients/new">
+                <Link href="/pages/clients/new">
                   <motion.button
                     className="px-6 py-3 rounded-xl gradient-bg text-white font-medium"
                     whileHover={{ scale: 1.02 }}
@@ -392,7 +392,7 @@ export default function ClientsPage() {
             damping: 20,
           }}
         >
-          <Link href="/clients/new">
+          <Link href="/pages/clients/new">
             <motion.button
               className="w-14 h-14 rounded-full gradient-bg shadow-lg flex items-center justify-center text-white animate-pulse-glow"
               whileHover={{ scale: 1.1 }}

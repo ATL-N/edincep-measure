@@ -61,6 +61,39 @@ export async function GET(request, { params }) {
   }
 }
 
+// export async function GET(request, { params }) {
+//   try {
+//     const { id } = params;
+
+//     const client = await prisma.client.findUnique({
+//       where: { id },
+//       include: {
+//         // This is the key change: we include the most recent measurement
+//         measurements: {
+//           orderBy: { createdAt: "desc" },
+//           take: 1,
+//         },
+//       },
+//     });
+
+//     if (!client) {
+//       return NextResponse.json({ error: "Client not found" }, { status: 404 });
+//     }
+
+//     // The client object will now have a `measurements` array
+//     // with either one item (the latest) or be empty.
+//     return NextResponse.json(client);
+//   } catch (error) {
+//     console.error("Error fetching client:", error);
+//     return NextResponse.json(
+//       { error: "Failed to fetch client" },
+//       { status: 500 }
+//     );
+//   }
+// }
+
+
+
 // PUT update client (NEW)
 export async function PUT(request, { params }) {
   try {

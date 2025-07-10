@@ -141,7 +141,7 @@ export default function MeasurementDetailPage() {
       : [];
 
   return (
-    <div className="min-h-screen p-6 pt-10 sm:pt-20 md:pt-30">
+    <div className="min-h-screen pt-0 md:pt-30 pb-10 mb-24 px-4 sm:px-6 lg:px-8">
       <motion.div
         variants={containerVariants}
         initial="hidden"
