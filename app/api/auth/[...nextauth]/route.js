@@ -44,6 +44,10 @@ export const authOptions = {
         if (!user || !user.hashedPassword) {
           throw new Error("Invalid credentials.");
         }
+        // Check if the user is soft-deleted
+        if (user.status === "DELETED") {
+          throw new Error("Your account has been deactivated.");
+        }
         const isPasswordCorrect = await bcrypt.compare(
           credentials.password,
           user.hashedPassword
@@ -68,6 +72,7 @@ export const authOptions = {
         // The 'user' parameter contains the full user object from the database
         session.user.id = user.id;
         session.user.role = user.role;
+        session.user.status = user.status; // Include user status
       }
       return session;
     },

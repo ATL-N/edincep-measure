@@ -1,6 +1,9 @@
-// app/api/clients/[id]/measurements/[sessionId]/route.js
+// app/api/measurements/[id]/pdf/route.js
+
 import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
+import PDFDocument from "pdfkit";
+import { Readable } from "stream";
 
 const prisma = new PrismaClient();
 
@@ -188,18 +191,23 @@ function transformMeasurementData(measurement) {
   return categorized;
 }
 
-// GET single measurement session
 export async function GET(request, { params }) {
   try {
-    const { id: clientId, sessionId } = params;
+    const { id: sessionId } = params;
 
     const session = await prisma.measurement.findUnique({
-      where: { id: sessionId, clientId: clientId }, // Ensure session belongs to the client
+      where: { id: sessionId },
       include: {
         client: {
           select: {
             name: true,
-            phone: true, // Explicitly select phone
+            phone: true,
+            email: true,
+          },
+        },
+        creator: {
+          select: {
+            name: true,
             email: true,
           },
         },
@@ -207,68 +215,97 @@ export async function GET(request, { params }) {
     });
 
     if (!session) {
-      return NextResponse.json(
-        { error: "Measurement session not found" },
-        { status: 404 }
-      );
+      return new NextResponse("Measurement session not found", { status: 404 });
     }
 
-    const { client, ...sessionData } = session;
-    const transformedMeasurements = transformMeasurementData(sessionData);
-
-    const responsePayload = {
-      client: { name: client.name, phone: client.phone, email: client.email },
-      session: {
-        id: sessionData.id,
-        createdAt: sessionData.createdAt,
-        notes: sessionData.notes,
-        status: sessionData.status,
-        completionDeadline: sessionData.completionDeadline,
-        materialImageUrl: sessionData.materialImageUrl,
-        designImageUrl: sessionData.designImageUrl,
-        measurements: transformedMeasurements,
+    const doc = new PDFDocument({
+      size: "A4",
+      margin: 50,
+      info: {
+        Title: `Measurement Session for ${session.client.name}`,
+        Author: "Edincep Measure",
       },
-    };
-
-    return NextResponse.json(responsePayload);
-  } catch (error) {
-    console.error("Error fetching measurement session:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch session" },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE single measurement session
-export async function DELETE(request, { params }) {
-  try {
-    const { id: clientId, sessionId } = params;
-
-    // First, verify the session exists and belongs to the client before deleting
-    const session = await prisma.measurement.findUnique({
-      where: { id: sessionId, clientId: clientId },
     });
 
-    if (!session) {
-      return NextResponse.json(
-        { error: "Measurement session not found" },
-        { status: 404 }
-      );
+    const stream = new Readable();
+    stream._read = () => {}; // _read is required but can be a no-op
+    doc.on("data", (chunk) => stream.push(chunk));
+    doc.on("end", () => stream.push(null));
+
+    // Header
+    doc.fontSize(24).font("Helvetica-Bold").text("Edincep Measure", { align: "center" });
+    doc.fontSize(12).font("Helvetica").text("Precision Tailoring & Design", { align: "center" });
+    doc.moveDown();
+
+    // Client Information
+    doc.fontSize(16).font("Helvetica-Bold").text(`Client: ${session.client.name}`);
+    doc.fontSize(10).font("Helvetica").text(`Email: ${session.client.email || 'N/A'}`);
+    doc.text(`Phone: ${session.client.phone || 'N/A'}`);
+    doc.moveDown();
+
+    // Session Details
+    doc.fontSize(14).font("Helvetica-Bold").text("Session Details");
+    doc.fontSize(10).font("Helvetica").text(`Session ID: ${session.id}`);
+    doc.text(`Created By: ${session.creator.name || 'N/A'} (${session.creator.email || 'N/A'})`);
+    doc.text(`Date: ${new Date(session.createdAt).toLocaleDateString()}`);
+    doc.text(`Order Status: ${session.status.replace(/_/g, ' ')}`);
+    doc.text(`Completion Deadline: ${session.completionDeadline ? new Date(session.completionDeadline).toLocaleDateString() : 'N/A'}`);
+    doc.moveDown();
+
+    // Notes
+    if (session.notes) {
+      doc.fontSize(12).font("Helvetica-Bold").text("Notes:");
+      doc.fontSize(10).font("Helvetica").text(session.notes);
+      doc.moveDown();
     }
 
-    await prisma.measurement.delete({
-      where: { id: sessionId },
-    });
+    // Images
+    if (session.materialImageUrl || session.designImageUrl) {
+      doc.fontSize(12).font("Helvetica-Bold").text("Associated Images:");
+      if (session.materialImageUrl) {
+        // For local files, you might need to adjust the path to be absolute
+        // For simplicity, this example assumes the image is accessible via a URL or a direct path from the server's perspective
+        // In a real app, you'd likely fetch the image and embed it, or use a full URL.
+        // For now, just display the URL.
+        doc.fontSize(10).font("Helvetica").text(`Material Image: ${process.cwd()}/public${session.materialImageUrl}`);
+        // Example of embedding an image (requires 'fs' or 'https' to read the image data)
+        // doc.image(`${process.cwd()}/public${session.materialImageUrl}`, { fit: [200, 200], align: 'center' });
+      }
+      if (session.designImageUrl) {
+        doc.fontSize(10).font("Helvetica").text(`Design Image: ${process.cwd()}/public${session.designImageUrl}`);
+        // doc.image(`${process.cwd()}/public${session.designImageUrl}`, { fit: [200, 200], align: 'center' });
+      }
+      doc.moveDown();
+    }
 
-    return NextResponse.json({ message: "Session deleted successfully" });
+    // Measurements
+    doc.fontSize(14).font("Helvetica-Bold").text("Measurements");
+    const transformedMeasurements = transformMeasurementData(session);
+
+    for (const category in transformedMeasurements) {
+      doc.fontSize(12).font("Helvetica-Bold").text(`${category.charAt(0).toUpperCase() + category.slice(1)} Measurements:`);
+      doc.moveDown(0.5);
+
+      transformedMeasurements[category].forEach((m) => {
+        doc.fontSize(10).font("Helvetica-Bold").text(`${m.name}:`);
+        doc.font("Helvetica").text(`  Snug: ${m.snug || 'N/A'} ${m.unit}`);
+        doc.text(`  Static: ${m.static || 'N/A'} ${m.unit}`);
+        doc.text(`  Dynamic: ${m.dynamic || 'N/A'} ${m.unit}`);
+        doc.moveDown(0.5);
+      });
+      doc.moveDown();
+    }
+
+    doc.end();
+
+    return new NextResponse(stream, {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="measurement_session_${sessionId}.pdf"`,
+      },
+    });
   } catch (error) {
-    console.error("Error deleting session:", error);
-    return NextResponse.json(
-      { error: "Failed to delete session" },
-      { status: 500 }
-    );
+    console.error("Error generating PDF:", error);
+    return new NextResponse("Failed to generate PDF", { status: 500 });
   }
 }
-
-// We can add PUT later for editing a session

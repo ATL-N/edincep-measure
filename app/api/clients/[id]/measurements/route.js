@@ -1,20 +1,28 @@
 // app/api/clients/[id]/measurements/route.js
+
 import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/session"; // Ensure this path points to your auth helper
 
 const prisma = new PrismaClient();
 
 // Helper function to count non-null measurement fields in a session
 const countFilledMeasurements = (measurement) => {
   let count = 0;
-  // List of keys to ignore (non-measurement fields)
+  // Updated list of keys to ignore (non-measurement fields)
   const ignoreKeys = [
     "id",
     "clientId",
-    "client",
+    "creatorId",
+    "client", // relation field
+    "creator", // relation field
     "notes",
     "createdAt",
     "updatedAt",
+    "status",
+    "completionDeadline",
+    "materialImageUrl",
+    "designImageUrl",
   ];
 
   for (const key in measurement) {
@@ -25,10 +33,17 @@ const countFilledMeasurements = (measurement) => {
   return count;
 };
 
-// GET all measurements for a client, with search capability
+// GET all measurements for a client (SECURED)
 export async function GET(request, { params }) {
   try {
-    const { id: clientId } = params;
+    // Authenticate the user
+    const user = await getCurrentUser();
+    if (!user || (user.role !== "DESIGNER" && user.role !== "ADMIN")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Fix: Access params.id directly to avoid Next.js warning
+    const clientId = params.id;
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
 
@@ -42,8 +57,12 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
-    // Build where clause for searching notes
-    const where = { clientId };
+    // Build where clause for searching, including authorization logic
+    const where = {
+      clientId,
+      // Security: Designers can only see measurements they created. Admins see all.
+      ...(user.role === "DESIGNER" && { creatorId: user.id }),
+    };
     if (search) {
       where.notes = { contains: search, mode: "insensitive" };
     }
@@ -72,48 +91,179 @@ export async function GET(request, { params }) {
   }
 }
 
-// POST new measurement for a client (Corrected)
+// POST new measurement for a client (FIXED & SECURED)
 export async function POST(request, { params }) {
   try {
-    const { id: clientId } = params;
-    const body = await request.json(); // e.g., { notes: '...', measurements: { shoulderToChestSnug: '23' } }
-    console.log('this is the body body:', body)
-    // Destructure the parts from the request body
-    const { notes, measurements } = body;
-
-    if (!measurements || typeof measurements !== 'object') {
-        return NextResponse.json({ error: "Measurements data is missing or not in the correct format." }, { status: 400 });
+    // 1. Authenticate user
+    const user = await getCurrentUser();
+    if (!user || (user.role !== "DESIGNER" && user.role !== "ADMIN")) {
+      return NextResponse.json(
+        { error: "Unauthorized to create measurements" },
+        { status: 401 }
+      );
     }
 
-    // --- THIS IS THE FIX ---
-    // Create the final flat object for Prisma by spreading the 'measurements' object
-    // and adding the other necessary fields.
-    const dataToSave = {
-      ...measurements, // Takes all key-value pairs from the measurements object
-      notes: notes,
-      clientId: clientId,
-    };
-    
-    // Prisma expects numbers, but form inputs are strings. Let's parse them.
-    // This loop ensures data integrity and prevents type errors.
-    for (const key in dataToSave) {
-        if (key !== 'notes' && key !== 'clientId') {
-            const value = parseFloat(dataToSave[key]);
-            // If the value is not a number (e.g., an empty string), save it as null.
-            dataToSave[key] = isNaN(value) ? null : value;
+    // 2. Fix: Access params.id directly
+    const clientId = params.id;
+
+    // 3. Authorize: Verify the designer is assigned to this client (Admins can bypass)
+    if (user.role === "DESIGNER") {
+      const isAssigned = await prisma.clientDesigner.findUnique({
+        where: {
+          clientId_designerId: { clientId, designerId: user.id },
+        },
+      });
+      if (!isAssigned) {
+        return NextResponse.json(
+          { error: "You are not assigned to this client" },
+          { status: 403 }
+        );
+      }
+    }
+
+    // 4. Get the request body
+    const body = await request.json();
+
+    // 5. Separate non-measurement fields from measurement fields which are strings
+    const {
+      notes,
+      status,
+      completionDeadline,
+      materialImageUrl,
+      designImageUrl,
+      ...measurementStrings
+    } = body;
+
+    // 6. CRITICAL FIX: Sanitize the measurement data, converting strings to Floats or null
+    const sanitizedMeasurements = {};
+    for (const key in measurementStrings) {
+      if (Object.prototype.hasOwnProperty.call(measurementStrings, key)) {
+        const value = measurementStrings[key];
+        // Check if the value is a non-empty string that can be parsed
+        if (typeof value === "string" && value.trim() !== "") {
+          const num = parseFloat(value);
+          sanitizedMeasurements[key] = isNaN(num) ? null : num;
+        } else if (typeof value === "number" && !isNaN(value)) {
+          // If it's already a number, keep it
+          sanitizedMeasurements[key] = value;
+        } else {
+          // For empty strings, null, or undefined, set the value to null
+          sanitizedMeasurements[key] = null;
         }
+      }
     }
 
-    const newSession = await prisma.measurement.create({
-      data: dataToSave, // Pass the corrected, flat object to Prisma
+    // 7. Create the new measurement record in the database
+    const newMeasurement = await prisma.measurement.create({
+      data: {
+        clientId,
+        creatorId: user.id,
+        notes,
+        status: status || "ORDER_CONFIRMED",
+        completionDeadline: completionDeadline
+          ? new Date(completionDeadline)
+          : null,
+        materialImageUrl,
+        designImageUrl,
+        // Spread the sanitized, correctly-typed measurement data
+        ...sanitizedMeasurements,
+      },
     });
 
-    return NextResponse.json(newSession, { status: 201 });
+    // 8. Return the newly created measurement
+    return NextResponse.json(newMeasurement, { status: 201 });
   } catch (error) {
     console.error("Error creating measurement:", error);
-    if (error instanceof Prisma.PrismaClientValidationError) {
-        return NextResponse.json({ error: "Invalid data provided for measurement.", details: error.message }, { status: 400 });
+    // Provide more detailed error response in development if needed
+    return NextResponse.json(
+      { error: "Failed to create measurement", details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT update a measurement (FIXED & SECURED)
+export async function PUT(request, { params }) {
+  try {
+    // 1. Authenticate user
+    const user = await getCurrentUser();
+    if (!user || (user.role !== "DESIGNER" && user.role !== "ADMIN")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    return NextResponse.json({ error: "Failed to create measurement session." }, { status: 500 });
+
+    // 2. Fix: Access params directly
+    const { measurementId } = params;
+    const body = await request.json();
+
+    // 3. Sanitize incoming data just like in the POST request
+    const {
+      notes,
+      status,
+      completionDeadline,
+      materialImageUrl,
+      designImageUrl,
+      ...measurementStrings
+    } = body;
+
+    const dataToUpdate = {
+      notes,
+      status,
+      completionDeadline: completionDeadline
+        ? new Date(completionDeadline)
+        : undefined, // Keep as undefined if null to avoid overwriting
+      materialImageUrl,
+      designImageUrl,
+    };
+
+    // Sanitize numeric fields
+    for (const key in measurementStrings) {
+      if (Object.prototype.hasOwnProperty.call(measurementStrings, key)) {
+        const value = measurementStrings[key];
+        if (typeof value === "string" && value.trim() !== "") {
+          const num = parseFloat(value);
+          dataToUpdate[key] = isNaN(num) ? null : num;
+        } else if (typeof value === "number" && !isNaN(value)) {
+          dataToUpdate[key] = value;
+        } else {
+          dataToUpdate[key] = null;
+        }
+      }
+    }
+
+    // Filter out any fields that are explicitly undefined, so they don't get updated
+    Object.keys(dataToUpdate).forEach(
+      (key) => dataToUpdate[key] === undefined && delete dataToUpdate[key]
+    );
+
+    // 4. Authorize: Build the where clause to ensure a designer can only update their own work
+    const whereClause = {
+      id: measurementId,
+      // Security: Admins can update any measurement, designers only their own
+      ...(user.role === "DESIGNER" && { creatorId: user.id }),
+    };
+
+    // 5. Update the measurement
+    const updatedMeasurement = await prisma.measurement.update({
+      where: whereClause,
+      data: dataToUpdate,
+    });
+
+    return NextResponse.json(updatedMeasurement);
+  } catch (error) {
+    // Prisma throws P2025 error if the record to update is not found
+    if (error.code === "P2025") {
+      return NextResponse.json(
+        {
+          error:
+            "Measurement not found or you don't have permission to edit it.",
+        },
+        { status: 404 }
+      );
+    }
+    console.error("Error updating measurement:", error);
+    return NextResponse.json(
+      { error: "Failed to update measurement", details: error.message },
+      { status: 500 }
+    );
   }
 }

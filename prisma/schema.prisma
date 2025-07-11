@@ -11,7 +11,7 @@ datasource db {
 }
 
 // ---------------------------------
-// --- NEW: USER & AUTH MODELS ---
+// --- USER & AUTH MODELS ---
 // ---------------------------------
 
 // Defines the user roles for the entire application.
@@ -21,48 +21,55 @@ enum Role {
   ADMIN     // A super admin who can oversee the entire system.
 }
 
+enum UserStatus {
+  ACTIVE
+  DELETED
+}
+
 // The core User model for anyone who logs into the system.
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  role          Role      @default(CLIENT) // New users default to the CLIENT role.
-  hashedPassword String?  // For email/password authentication
+  id             String    @id @default(cuid())
+  name           String?
+  email          String?   @unique
+  emailVerified  DateTime?
+  image          String?
+  role           Role      @default(CLIENT)
+  status         UserStatus @default(ACTIVE)
+  hashedPassword String?
+
   // --- Auth.js relations ---
-  accounts      Account[]
-  sessions      Session[]
+  accounts Account[]
+  sessions Session[]
 
   // --- Application-specific relations ---
   // If the user IS a client, this links to their client profile.
-  clientProfile         Client?              @relation("ClientUser")
-  
-  // If the user IS a designer, this lists all clients they manage.
-  clientsAsDesigner     Client[]             @relation("DesignerClients")
-  
+  clientProfile Client? @relation("ClientUser")
+
+  // --- NEW: A designer is assigned to many clients via the join table ---
+  // This replaces the old one-to-many `clientsAsDesigner` field.
+  assignedClients ClientDesigner[]
+
   // A list of all measurement sessions created by this user (for auditing).
-  createdMeasurements   Measurement[]
-  
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdMeasurements Measurement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Model for linking OAuth accounts (e.g., Google) to a User.
-// Required by Auth.js Prisma adapter.
 model Account {
-  id                 String  @id @default(cuid())
-  userId             String
-  type               String
-  provider           String
-  providerAccountId  String
-  refresh_token      String? @db.Text
-  access_token       String? @db.Text
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String? @db.Text
-  session_state      String?
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -70,7 +77,6 @@ model Account {
 }
 
 // Model for managing user login sessions.
-// Required by Auth.js Prisma adapter.
 model Session {
   id           String   @id @default(cuid())
   sessionToken String   @unique
@@ -80,7 +86,6 @@ model Session {
 }
 
 // Model for "magic link" email sign-ins.
-// Required by Auth.js Prisma adapter.
 model VerificationToken {
   identifier String
   token      String   @unique
@@ -91,7 +96,7 @@ model VerificationToken {
 
 
 // ------------------------------------
-// --- UPDATED APPLICATION MODELS ---
+// --- APPLICATION MODELS ---
 // ------------------------------------
 
 enum ClientStatus {
@@ -99,170 +104,196 @@ enum ClientStatus {
   Inactive
 }
 
-model Client {
-  id           String       @id @default(cuid())
-  name         String
-  phone        String?
-  email        String?      // Kept for clients who are not platform users.
-  address      String?
-  dateOfBirth  DateTime?
-  notes        String?
-  status       ClientStatus @default(Active)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+// --- NEW: JOIN TABLE for Many-to-Many Relationship ---
+// This table connects a User (Designer) to a Client.
+// Each row signifies that a specific designer is assigned to a specific client.
+model ClientDesigner {
+  clientId   String
+  designerId String
+  assignedAt DateTime @default(now()) // You can track when the assignment was made.
 
-  // --- NEW: User Relationships ---
-  // The designer who manages this client.
-  designerId   String
-  designer     User         @relation("DesignerClients", fields: [designerId], references: [id], onDelete: Restrict)
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  designer User   @relation(fields: [designerId], references: [id], onDelete: Cascade)
+
+  @@id([clientId, designerId]) // Composite primary key ensures a designer is assigned to a client only once.
+  @@map("client_designers")
+}
+
+model Client {
+  id          String       @id @default(cuid())
+  name        String
+  phone       String?
+  email       String?
+  address     String?
+  dateOfBirth DateTime?
+  notes       String?
+  status      ClientStatus @default(Active)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // --- NEW: Many-to-Many Relationship ---
+  // A client can have many assigned designers, linked via the ClientDesigner table.
+  // This replaces the old `designer` and `designerId` fields.
+  assignedDesigners ClientDesigner[]
 
   // If the client is also a user on the platform, this links to their User account.
   // This is optional and unique.
-  userId       String?      @unique
-  user         User?        @relation("ClientUser", fields: [userId], references: [id], onDelete: SetNull)
-  
-  // --- Existing Relationship ---
+  userId String? @unique
+  user   User?   @relation("ClientUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  // Existing relationship to measurements remains the same.
   measurements Measurement[]
-  
+
   @@index([name])
-  @@index([designerId]) // Add index for faster lookups by designer.
   @@map("clients")
 }
 
-model Measurement {
-  id        String   @id @default(cuid())
-  
-  // --- Existing Relationship ---
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+enum OrderStatus {
+  ORDER_CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  DELIVERED
+}
 
-  // --- NEW: User Relationship ---
-  // Tracks which designer/user created this measurement session. Crucial for auditing.
+model Measurement {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // --- THIS IS THE KEY for your data privacy rule ---
+  // It tracks which designer/user created this specific measurement session.
+  // This structure is already perfect and does not need to change.
   creatorId String
   creator   User     @relation(fields: [creatorId], references: [id], onDelete: Restrict)
-  
+
+  // Order details
+  status             OrderStatus @default(ORDER_CONFIRMED)
+  completionDeadline DateTime?
+  materialImageUrl   String?
+  designImageUrl     String?
+
   // Vertical measurements (shoulder to various points) - Snug, Static, Dynamic
   shoulderToChestSnug      Float?
   shoulderToChestStatic    Float?
   shoulderToChestDynamic   Float?
-  
+
   shoulderToBustSnug       Float?
   shoulderToBustStatic     Float?
   shoulderToBustDynamic    Float?
-  
+
   shoulderToUnderbustSnug  Float?
   shoulderToUnderbustStatic Float?
   shoulderToUnderbustDynamic Float?
-  
+
   shoulderToWaistFrontSnug Float?
   shoulderToWaistFrontStatic Float?
   shoulderToWaistFrontDynamic Float?
-  
+
   shoulderToWaistBackSnug  Float?
   shoulderToWaistBackStatic Float?
   shoulderToWaistBackDynamic Float?
-  
-  waistToHipSnug          Float?
-  waistToHipStatic        Float?
-  waistToHipDynamic       Float?
-  
-  shoulderToKneeSnug      Float?
-  shoulderToKneeStatic    Float?
-  shoulderToKneeDynamic   Float?
-  
+
+  waistToHipSnug           Float?
+  waistToHipStatic         Float?
+  waistToHipDynamic        Float?
+
+  shoulderToKneeSnug       Float?
+  shoulderToKneeStatic     Float?
+  shoulderToKneeDynamic    Float?
+
   shoulderToDressLengthSnug Float?
   shoulderToDressLengthStatic Float?
   shoulderToDressLengthDynamic Float?
-  
-  shoulderToAnkleSnug     Float?
-  shoulderToAnkleStatic   Float?
-  shoulderToAnkleDynamic  Float?
-  
+
+  shoulderToAnkleSnug      Float?
+  shoulderToAnkleStatic    Float?
+  shoulderToAnkleDynamic   Float?
+
   // Width measurements - Snug, Static, Dynamic
-  shoulderWidthSnug       Float?
-  shoulderWidthStatic     Float?
-  shoulderWidthDynamic    Float?
-  
-  nippleToNippleSnug      Float?
-  nippleToNippleStatic    Float?
-  nippleToNippleDynamic   Float?
-  
-  offShoulderSnug         Float?
-  offShoulderStatic       Float?
-  offShoulderDynamic      Float?
-  
+  shoulderWidthSnug        Float?
+  shoulderWidthStatic      Float?
+  shoulderWidthDynamic     Float?
+
+  nippleToNippleSnug       Float?
+  nippleToNippleStatic     Float?
+  nippleToNippleDynamic    Float?
+
+  offShoulderSnug          Float?
+  offShoulderStatic        Float?
+  offShoulderDynamic       Float?
+
   // Circumference measurements - Snug, Static, Dynamic
-  bustSnug                Float?
-  bustStatic              Float?
-  bustDynamic             Float?
-  
-  underBustSnug           Float?
-  underBustStatic         Float?
-  underBustDynamic        Float?
-  
-  waistSnug               Float?
-  waistStatic             Float?
-  waistDynamic            Float?
-  
-  hipSnug                 Float?
-  hipStatic               Float?
-  hipDynamic              Float?
-  
-  thighSnug               Float?
-  thighStatic             Float?
-  thighDynamic            Float?
-  
-  kneeSnug                Float?
-  kneeStatic              Float?
-  kneeDynamic             Float?
-  
-  ankleSnug               Float?
-  ankleStatic             Float?
-  ankleDynamic            Float?
-  
-  neckSnug                Float?
-  neckStatic              Float?
-  neckDynamic             Float?
-  
+  bustSnug                 Float?
+  bustStatic               Float?
+  bustDynamic              Float?
+
+  underBustSnug            Float?
+  underBustStatic          Float?
+  underBustDynamic         Float?
+
+  waistSnug                Float?
+  waistStatic              Float?
+  waistDynamic             Float?
+
+  hipSnug                  Float?
+  hipStatic                Float?
+  hipDynamic               Float?
+
+  thighSnug                Float?
+  thighStatic              Float?
+  thighDynamic             Float?
+
+  kneeSnug                 Float?
+  kneeStatic               Float?
+  kneeDynamic              Float?
+
+  ankleSnug                Float?
+  ankleStatic              Float?
+  ankleDynamic             Float?
+
+  neckSnug                 Float?
+  neckStatic               Float?
+  neckDynamic              Float?
+
   // Arm measurements - Snug, Static, Dynamic
-  shirtSleeveSnug         Float?
-  shirtSleeveStatic       Float?
-  shirtSleeveDynamic      Float?
-  
-  elbowLengthSnug         Float?
-  elbowLengthStatic       Float?
-  elbowLengthDynamic      Float?
-  
-  longSleevesSnug         Float?
-  longSleevesStatic       Float?
-  longSleevesDynamic      Float?
-  
-  aroundArmSnug           Float?
-  aroundArmStatic         Float?
-  aroundArmDynamic        Float?
-  
-  elbowSnug               Float?
-  elbowStatic             Float?
-  elbowDynamic            Float?
-  
-  wristSnug               Float?
-  wristStatic             Float?
-  wristDynamic            Float?
-  
+  shirtSleeveSnug          Float?
+  shirtSleeveStatic        Float?
+  shirtSleeveDynamic       Float?
+
+  elbowLengthSnug          Float?
+  elbowLengthStatic        Float?
+  elbowLengthDynamic       Float?
+
+  longSleevesSnug          Float?
+  longSleevesStatic        Float?
+  longSleevesDynamic       Float?
+
+  aroundArmSnug            Float?
+  aroundArmStatic          Float?
+  aroundArmDynamic         Float?
+
+  elbowSnug                Float?
+  elbowStatic              Float?
+  elbowDynamic             Float?
+
+  wristSnug                Float?
+  wristStatic              Float?
+  wristDynamic             Float?
+
   // Leg measurements - Snug, Static, Dynamic
-  inSeamSnug              Float?
-  inSeamStatic            Float?
-  inSeamDynamic           Float?
-  
-  outSeamSnug             Float?
-  outSeamStatic           Float?
-  outSeamDynamic          Float?
-  
+  inSeamSnug               Float?
+  inSeamStatic             Float?
+  inSeamDynamic            Float?
+
+  outSeamSnug              Float?
+  outSeamStatic            Float?
+  outSeamDynamic           Float?
+
   // Session info
-  notes               String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  
-  @@index([creatorId]) // Add index for faster lookups by creator.
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([creatorId])
   @@map("measurements")
 }

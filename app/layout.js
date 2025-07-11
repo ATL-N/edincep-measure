@@ -5,7 +5,7 @@ import { Inter } from "next/font/google";
 import { ThemeProvider } from "./components/ThemeProvider";
 // import { FloatingCursor } from "./components/FloatingCursor";
 // import { Navigation } from "./components/Navigation";
-// import Providers from "./providers"; // Import the new provider component
+import Providers from "./providers"; // Import the new provider component
 
 
 const inter = Inter({ subsets: ["latin"] });
@@ -75,14 +75,15 @@ export default function RootLayout({ children }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
       <body className={inter.className}>
-        
-        <ThemeProvider>
-          {/* <FloatingCursor />
+        <Providers>
+          <ThemeProvider>
+            {/* <FloatingCursor />
           <Navigation /> */}
-          <main className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/20">
-            {children}
-          </main>
-        </ThemeProvider>
+            <main className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/20">
+              {children}
+            </main>
+          </ThemeProvider>
+        </Providers>
       </body>
     </html>
   );

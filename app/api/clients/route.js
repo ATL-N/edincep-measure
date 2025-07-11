@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/session";
 
 const prisma = new PrismaClient();
 
-// GET all clients for the LOGGED-IN DESIGNER
+// GET all clients for the LOGGED-IN DESIGNER or all clients for ADMIN
 export async function GET(request) {
   try {
     // 1. Authenticate the user using the session helper
@@ -14,11 +14,10 @@ export async function GET(request) {
 
     console.log("User from session:", user);
 
-    // 2. Authorize the user: check if they are logged in and have the correct role
-    if (!user || user.role !== "DESIGNER") {
+    // 2. Authorize the user: check if they are logged in
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const designerId = user.id;
 
     // 3. Get query parameters for filtering and pagination
     const { searchParams } = new URL(request.url);
@@ -29,10 +28,19 @@ export async function GET(request) {
     const limit = parseInt(searchParams.get("limit") || "12");
     const offset = (page - 1) * limit;
 
-    // 4. Build the 'where' clause, starting with the mandatory designerId
-    const where = {
-      designerId: designerId, // This is the core of multi-tenancy
-    };
+    // 4. Build the 'where' clause based on user role
+    const where = {};
+
+    if (user.role === "DESIGNER") {
+      where.assignedDesigners = {
+        some: {
+          designerId: user.id,
+        },
+      };
+    } else if (user.role !== "ADMIN") {
+      // If not an ADMIN or DESIGNER, they can't see any clients
+      return NextResponse.json({ clients: [], pagination: { total: 0 } });
+    }
 
     // Add search filters if provided
     if (search) {
@@ -143,20 +151,62 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+     if (!email) {
+      return NextResponse.json(
+        { error: "Email is required." },
+        { status: 400 }
+      );
+    }
 
-    // 5. Create the new client, ensuring the designerId is set
-    const client = await prisma.client.create({
-      data: {
-        name,
-        phone,
-        email,
-        address,
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-        notes,
-        status: status || "Active",
-        designerId: designerId, // Assign the client to the logged-in designer
-      },
+
+    // 5. Upsert User and Create Client in a transaction
+    const client = await prisma.$transaction(async (prisma) => {
+      // Step 5a: Find or create the user
+      let clientUser = await prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (clientUser) {
+        // If user exists, update their details
+        clientUser = await prisma.user.update({
+          where: { email },
+          data: { name },
+        });
+      } else {
+        // If user does not exist, create a new one
+        clientUser = await prisma.user.create({
+          data: {
+            name,
+            email,
+            role: 'CLIENT', // Assign CLIENT role
+          },
+        });
+      }
+
+      // Step 5b: Create the client and associate with the designer and user
+      const newClient = await prisma.client.create({
+        data: {
+          name,
+          phone,
+          email,
+          address,
+          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+          notes,
+          status: status || "Active",
+          user: {
+            connect: { id: clientUser.id },
+          },
+          assignedDesigners: {
+            create: {
+              designerId: designerId,
+            },
+          },
+        },
+      });
+
+      return newClient;
     });
+
 
     // 6. Return the newly created client
     return NextResponse.json(client, { status: 201 });

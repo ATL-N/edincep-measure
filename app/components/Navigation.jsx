@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { useTheme } from "./ThemeProvider";
+import { useSession } from "next-auth/react";
 import {
   HomeIcon,
   UsersIcon,
@@ -21,74 +22,147 @@ import {
   CogIcon as CogIconSolid,
 } from "@heroicons/react/24/solid";
 
-const navigation = [
-  {
-    name: "Clients",
-    href: "/pages/clients",
-    icon: UsersIcon,
-    iconSolid: UsersIconSolid,
-  },
-  {
-    name: "Add Client",
-    href: "/pages/clients/new",
-    icon: PlusIcon,
-    iconSolid: PlusIconSolid,
-  },
-  {
-    name: "Analytics",
-    href: "/pages/analytics",
-    icon: ChartBarIcon,
-    iconSolid: ChartBarIconSolid,
-  },
-  {
-    name: "Settings",
-    href: "/pages/settings",
-    icon: CogIcon,
-    iconSolid: CogIconSolid,
-  },
-];
+const getNavigation = (role) => {
+  switch (role) {
+    case "ADMIN":
+      return [
+        {
+          name: "Users",
+          href: "/pages/admin/dashboard",
+          icon: UsersIcon,
+          iconSolid: UsersIconSolid,
+        },
+      ];
+    case "DESIGNER":
+      return [
+        {
+          name: "Clients",
+          href: "/pages/clients",
+          icon: UsersIcon,
+          iconSolid: UsersIconSolid,
+        },
+        {
+          name: "Add Client",
+          href: "/pages/clients/new",
+          icon: PlusIcon,
+          iconSolid: PlusIconSolid,
+        },
+        {
+          name: "Analytics",
+          href: "/pages/analytics",
+          icon: ChartBarIcon,
+          iconSolid: ChartBarIconSolid,
+        },
+        {
+          name: "Settings",
+          href: "/pages/settings",
+          icon: CogIcon,
+          iconSolid: CogIconSolid,
+        },
+      ];
+    default:
+      return [
+        {
+          name: "Dashboard",
+          href: "/pages/clients/dashboard",
+          icon: HomeIcon,
+          iconSolid: HomeIconSolid,
+        },
+        {
+          name: "Settings",
+          href: "/pages/settings",
+          icon: CogIcon,
+          iconSolid: CogIconSolid,
+        },
+      ];
+  }
+};
 
-const mobileNavigation = [
-  {
-    name: "Dashboard",
-    href: "/",
-    icon: HomeIcon,
-    iconSolid: HomeIconSolid,
-    label: "Home",
-  },
-  {
-    name: "Clients",
-    href: "/pages/clients",
-    icon: UsersIcon,
-    iconSolid: UsersIconSolid,
-    label: "Clients",
-  },
-  {
-    name: "Add Client",
-    href: "/pages/clients/new",
-    icon: PlusIcon,
-    iconSolid: PlusIconSolid,
-    label: "Add",
-  },
-  {
-    name: "Analytics",
-    href: "/pages/analytics",
-    icon: ChartBarIcon,
-    iconSolid: ChartBarIconSolid,
-    label: "Analytics",
-  },
-  {
-    name: "Settings",
-    href: "/pages/settings",
-    icon: CogIcon,
-    iconSolid: CogIconSolid,
-    label: "Settings",
-  },
-];
+const getMobileNavigation = (role) => {
+  switch (role) {
+    case "ADMIN":
+      return [
+        {
+          name: "Dashboard",
+          href: "/pages/admin/dashboard",
+          icon: HomeIcon,
+          iconSolid: HomeIconSolid,
+          label: "Home",
+        },
+        {
+          name: "Settings",
+          href: "/pages/settings",
+          icon: CogIcon,
+          iconSolid: CogIconSolid,
+          label: "Settings",
+        },
+      ];
+    case "DESIGNER":
+      return [
+        {
+          name: "Dashboard",
+          href: "/pages/dashboard",
+          icon: HomeIcon,
+          iconSolid: HomeIconSolid,
+          label: "Home",
+        },
+        {
+          name: "Clients",
+          href: "/pages/clients",
+          icon: UsersIcon,
+          iconSolid: UsersIconSolid,
+          label: "Clients",
+        },
+        {
+          name: "Add Client",
+          href: "/pages/clients/new",
+          icon: PlusIcon,
+          iconSolid: PlusIconSolid,
+          label: "Add",
+        },
+        {
+          name: "Analytics",
+          href: "/pages/analytics",
+          icon: ChartBarIcon,
+          iconSolid: ChartBarIconSolid,
+          label: "Analytics",
+        },
+        {
+          name: "Settings",
+          href: "/pages/settings",
+          icon: CogIcon,
+          iconSolid: CogIconSolid,
+          label: "Settings",
+        },
+      ];
+    default:
+      return [
+        {
+          name: "Dashboard",
+          href: "/pages/clients/dashboard",
+          icon: HomeIcon,
+          iconSolid: HomeIconSolid,
+          label: "Home",
+        },
+        {
+          name: "Settings",
+          href: "/pages/settings",
+          icon: CogIcon,
+          iconSolid: CogIconSolid,
+          label: "Settings",
+        },
+      ];
+  }
+};
 
 export function Navigation() {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
+  const { data: session } = useSession();
+  const userRole = session?.user?.role;
+
+  const navigation = getNavigation(userRole);
+  const mobileNavigation = getMobileNavigation(userRole);
 
   return (
     <>

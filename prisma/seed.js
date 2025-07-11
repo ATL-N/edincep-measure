@@ -1,10 +1,21 @@
 // prisma/seed.js
 const { PrismaClient } = require("@prisma/client");
+const bcrypt = require("bcrypt");
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log("🌱 Seeding database...");
+
+  // Create a designer user
+  const designer = await prisma.user.create({
+    data: {
+      name: "Tom Designer",
+      email: "designer@example.com",
+      role: "DESIGNER",
+      hashedPassword: await bcrypt.hash("password", 10),
+    },
+  });
 
   // Create sample clients
   const clients = await Promise.all([
@@ -57,6 +68,16 @@ async function main() {
 
   console.log("✅ Created clients:", clients.length);
 
+  // Assign the first two clients to the designer
+  await prisma.clientDesigner.createMany({
+    data: [
+      { clientId: clients[0].id, designerId: designer.id },
+      { clientId: clients[1].id, designerId: designer.id },
+    ],
+  });
+
+  console.log("✅ Assigned clients to designer");
+
   // Create sample measurements for each client
   const measurements = [];
 
@@ -65,6 +86,7 @@ async function main() {
     await prisma.measurement.create({
       data: {
         clientId: clients[0].id,
+        creatorId: designer.id,
         // Vertical measurements
         shoulderToChestSnug: 7.0,
         shoulderToChestStatic: 7.2,
@@ -143,6 +165,7 @@ async function main() {
     await prisma.measurement.create({
       data: {
         clientId: clients[1].id,
+        creatorId: designer.id,
         shoulderToChestSnug: 6.5,
         shoulderToChestStatic: 6.7,
         shoulderToBustSnug: 10.5,
@@ -184,6 +207,7 @@ async function main() {
     await prisma.measurement.create({
       data: {
         clientId: clients[2].id,
+        creatorId: designer.id,
         shoulderToChestStatic: 7.5,
         shoulderToBustStatic: 12.0,
         shoulderToUnderbustStatic: 15.5,
@@ -214,6 +238,7 @@ async function main() {
     await prisma.measurement.create({
       data: {
         clientId: clients[3].id,
+        creatorId: designer.id,
         shoulderToChestSnug: 6.8,
         shoulderToChestStatic: 7.0,
         shoulderToBustSnug: 11.2,
@@ -255,6 +280,7 @@ async function main() {
     await prisma.measurement.create({
       data: {
         clientId: clients[4].id,
+        creatorId: designer.id,
         shoulderToChestSnug: 6.0,
         shoulderToBustSnug: 10.0,
         shoulderToUnderbustSnug: 13.5,
@@ -285,6 +311,7 @@ async function main() {
     await prisma.measurement.create({
       data: {
         clientId: clients[0].id,
+        creatorId: designer.id,
         shoulderToChestSnug: 7.2,
         shoulderToChestStatic: 7.4,
         shoulderToBustSnug: 11.8,
@@ -326,6 +353,7 @@ async function main() {
     await prisma.measurement.create({
       data: {
         clientId: clients[1].id,
+        creatorId: designer.id,
         shoulderToChestDynamic: 6.3,
         shoulderToBustDynamic: 10.3,
         shoulderToUnderbustDynamic: 14.3,

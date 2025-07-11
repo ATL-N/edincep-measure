@@ -101,6 +101,12 @@ export default function MeasurementFormPage() {
   const [measurements, setMeasurements] = useState({});
   const [notes, setNotes] = useState("");
   const [lastMeasurements, setLastMeasurements] = useState({});
+  const [orderStatus, setOrderStatus] = useState("ORDER_CONFIRMED"); // New state
+  const [completionDeadline, setCompletionDeadline] = useState(""); // New state
+  const [materialFile, setMaterialFile] = useState(null); // New state for file upload
+  const [designFile, setDesignFile] = useState(null); // New state for file upload
+  const [materialImageUrl, setMaterialImageUrl] = useState(""); // New state for image URL
+  const [designImageUrl, setDesignImageUrl] = useState(""); // New state for image URL
 
   // UI State
   const [expandedCategories, setExpandedCategories] = useState({
@@ -132,6 +138,10 @@ export default function MeasurementFormPage() {
           setClientName(clientData.name);
           setMeasurements(sessionData || {});
           setNotes(sessionData.notes || "");
+          setOrderStatus(sessionData.status || "ORDER_CONFIRMED");
+          setCompletionDeadline(sessionData.completionDeadline ? new Date(sessionData.completionDeadline).toISOString().split('T')[0] : "");
+          setMaterialImageUrl(sessionData.materialImageUrl || "");
+          setDesignImageUrl(sessionData.designImageUrl || "");
         } else {
           // --- NEW SESSION MODE (UPDATED LOGIC) ---
           // Fetch the client, which now includes their *full* measurement history
@@ -167,21 +177,66 @@ export default function MeasurementFormPage() {
   const handleSave = async () => {
     setIsSaving(true);
     setError(null);
-    const url = isEditMode
-      ? `/api/clients/${clientId}/measurements/${sessionId}`
-      : `/api/clients/${clientId}/measurements`;
-    const method = isEditMode ? "PUT" : "POST";
 
-    // This logic correctly merges new values over the old ones for a new session.
-    const finalMeasurements = isEditMode
-      ? measurements
-      : { ...lastMeasurements, ...measurements };
+    let finalMaterialImageUrl = materialImageUrl;
+    let finalDesignImageUrl = designImageUrl;
 
     try {
+      // Upload material image if a new one is selected
+      if (materialFile) {
+        const formData = new FormData();
+        formData.append("file", materialFile);
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        if (!uploadRes.ok) {
+          const errData = await uploadRes.json();
+          throw new Error(errData.error || "Failed to upload material image.");
+        }
+        const uploadResult = await uploadRes.json();
+        finalMaterialImageUrl = uploadResult.path;
+      }
+
+      // Upload design image if a new one is selected
+      if (designFile) {
+        const formData = new FormData();
+        formData.append("file", designFile);
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        if (!uploadRes.ok) {
+          const errData = await uploadRes.json();
+          throw new Error(errData.error || "Failed to upload design image.");
+        }
+        const uploadResult = await uploadRes.json();
+        finalDesignImageUrl = uploadResult.path;
+      }
+
+      const url = isEditMode
+        ? `/api/clients/${clientId}/measurements/${sessionId}`
+        : `/api/clients/${clientId}/measurements`;
+      const method = isEditMode ? "PUT" : "POST";
+
+      // This logic correctly merges new values over the old ones for a new session.
+      const finalMeasurements = isEditMode
+        ? measurements
+        : { ...lastMeasurements, ...measurements };
+
+      const body = {
+        notes,
+        ...finalMeasurements,
+        status: orderStatus,
+        completionDeadline,
+        materialImageUrl: finalMaterialImageUrl,
+        designImageUrl: finalDesignImageUrl,
+      };
+
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notes, measurements: finalMeasurements }),
+        body: JSON.stringify(body),
       });
       if (!response.ok) {
         const errData = await response.json();
@@ -237,6 +292,79 @@ export default function MeasurementFormPage() {
               placeholder="Add notes about this session (e.g., fabric type, client preferences)..."
               className="w-full h-24 bg-background/50 border border-border rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-primary"
             />
+          </div>
+        </motion.div>
+
+        {/* New Order Details Section */}
+        <motion.div className="mb-8">
+          <div className="glass rounded-xl p-6 border">
+            <h2 className="text-xl font-bold mb-4 gradient-text">Order Details</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium mb-2" htmlFor="orderStatus">
+                  Order Status
+                </label>
+                <select
+                  id="orderStatus"
+                  value={orderStatus}
+                  onChange={(e) => setOrderStatus(e.target.value)}
+                  className="w-full bg-background/50 border border-border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="ORDER_CONFIRMED">Order Confirmed</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="DELIVERED">Delivered</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2" htmlFor="completionDeadline">
+                  Completion Deadline
+                </label>
+                <input
+                  type="date"
+                  id="completionDeadline"
+                  value={completionDeadline}
+                  onChange={(e) => setCompletionDeadline(e.target.value)}
+                  className="w-full bg-background/50 border border-border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2" htmlFor="materialImage">
+                  Material Image
+                </label>
+                <input
+                  type="file"
+                  id="materialImage"
+                  accept="image/*"
+                  onChange={(e) => setMaterialFile(e.target.files[0])}
+                  className="w-full bg-background/50 border border-border rounded-lg p-3 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/80"
+                />
+                {materialImageUrl && (
+                  <div className="mt-2">
+                    <p className="text-sm text-muted-foreground">Current: <a href={materialImageUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{materialImageUrl.split('/').pop()}</a></p>
+                    <img src={materialImageUrl} alt="Material Preview" className="mt-2 max-h-32 rounded-lg object-cover" />
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2" htmlFor="designImage">
+                  Design/Style Image
+                </label>
+                <input
+                  type="file"
+                  id="designImage"
+                  accept="image/*"
+                  onChange={(e) => setDesignFile(e.target.files[0])}
+                  className="w-full bg-background/50 border border-border rounded-lg p-3 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/80"
+                />
+                {designImageUrl && (
+                  <div className="mt-2">
+                    <p className="text-sm text-muted-foreground">Current: <a href={designImageUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{designImageUrl.split('/').pop()}</a></p>
+                    <img src={designImageUrl} alt="Design Preview" className="mt-2 max-h-32 rounded-lg object-cover" />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </motion.div>
 
