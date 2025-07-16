@@ -115,7 +115,7 @@ export default function SignupPage() {
         <div className="glass rounded-2xl p-8">
           <button
             onClick={() => signIn("google")}
-            className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-border rounded-xl bg-background/50 hover:bg-accent transition-colors mb-6 cursor-pointer"
+            className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-border rounded-xl bg-background/50 hover:bg-accent transition-colors mb-6 cursor-pointer">
             <GoogleIcon />
             <span className="font-medium text-foreground">
               Sign up with Google
