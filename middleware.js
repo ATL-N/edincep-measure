@@ -90,7 +90,7 @@ export async function middleware(req) {
 
 
   // Define public paths
-  const publicPaths = ["/login", "/signup"];
+  const publicPaths = ["/login", "/signup", '/'];
 
   const isPublicPath = publicPaths.some(
     (path) => pathname === path || (path !== "/" && pathname.startsWith(path))

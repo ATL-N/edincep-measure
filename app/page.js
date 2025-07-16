@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import {
   UsersIcon,
   ChartBarIcon,
@@ -170,6 +171,7 @@ const floatingVariants = {
 
 export default function LandingPage() {
   const [activeSection, setActiveSection] = useState("home");
+  const { data: session, status } = useSession();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -227,19 +229,23 @@ export default function LandingPage() {
                 measurement system.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link
-                  href="/auth/signup"
-                  className="inline-flex items-center px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-primary to-secondary rounded-2xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
-                >
-                  Start Creating
-                  <ArrowRightIcon className="w-5 h-5 ml-2" />
-                </Link>
-                <Link
-                  href="/auth/login"
-                  className="inline-flex items-center px-8 py-4 text-lg font-semibold text-foreground glass rounded-2xl hover:shadow-xl transition-all duration-300"
-                >
-                  Sign In
-                </Link>
+                {status === "unauthenticated" && (
+                  <Link
+                    href="/signup"
+                    className="inline-flex items-center px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-primary to-secondary rounded-2xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
+                  >
+                    Start Creating
+                    <ArrowRightIcon className="w-5 h-5 ml-2" />
+                  </Link>
+                )}
+                {status === "unauthenticated" && (
+                  <Link
+                    href="/login"
+                    className="inline-flex items-center px-8 py-4 text-lg font-semibold text-foreground glass rounded-2xl hover:shadow-xl transition-all duration-300"
+                  >
+                    Sign In
+                  </Link>
+                )}
               </div>
             </motion.div>
 
@@ -437,16 +443,18 @@ export default function LandingPage() {
                     ))}
                   </ul>
 
-                  <Link
-                    href="/auth/signup"
-                    className={`block w-full text-center px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
-                      plan.popular
-                        ? "bg-gradient-to-r from-primary to-secondary text-white hover:shadow-2xl hover:scale-105"
-                        : "glass hover:shadow-xl text-foreground"
-                    }`}
-                  >
-                    Get Started
-                  </Link>
+                  {status === "unauthenticated" && (
+                    <Link
+                      href="/signup"
+                      className={`block w-full text-center px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
+                        plan.popular
+                          ? "bg-gradient-to-r from-primary to-secondary text-white hover:shadow-2xl hover:scale-105"
+                          : "glass hover:shadow-xl text-foreground"
+                      }`}
+                    >
+                      Get Started
+                    </Link>
+                  )}
                 </motion.div>
               ))}
             </div>
@@ -471,13 +479,15 @@ export default function LandingPage() {
                 precision measurement platform.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link
-                  href="/auth/signup"
-                  className="inline-flex items-center px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-primary to-secondary rounded-2xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
-                >
-                  Start Free Trial
-                  <ArrowRightIcon className="w-5 h-5 ml-2" />
-                </Link>
+                {status === "unauthenticated" && (
+                  <Link
+                    href="/signup"
+                    className="inline-flex items-center px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-primary to-secondary rounded-2xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
+                  >
+                    Start Free Trial
+                    <ArrowRightIcon className="w-5 h-5 ml-2" />
+                  </Link>
+                )}
                 <Link
                   href="/contact"
                   className="inline-flex items-center px-8 py-4 text-lg font-semibold text-foreground glass rounded-2xl hover:shadow-xl transition-all duration-300"

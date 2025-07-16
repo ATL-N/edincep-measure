@@ -68,7 +68,7 @@ services:
         echo 'Generating Prisma client...' &&
         npx prisma generate &&
         echo 'Running seed...' &&
-        npx prisma db seed &&
+        # npx prisma db seed &&
         echo 'Database initialization completed!'
       "
     networks:

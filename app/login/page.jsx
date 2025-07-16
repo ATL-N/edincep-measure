@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -38,6 +38,19 @@ export default function LoginPage() {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { data: session, status } = useSession();
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      if (session.user.role === "ADMIN") {
+        router.push("/pages/admin/dashboard");
+      } else if (session.user.role === "CLIENT") {
+        router.push("/pages/client/dashboard");
+      } else {
+        router.push("/"); // Default fallback
+      }
+    }
+  }, [session, status, router]);
 
   const handleCredentialsLogin = async (e) => {
     e.preventDefault();
@@ -55,7 +68,7 @@ export default function LoginPage() {
     if (result.error) {
       setError("Invalid email or password. Please try again.");
     } else {
-      router.push("/");
+      // Redirection is now handled by the useEffect hook
     }
   };
 
@@ -74,7 +87,7 @@ export default function LoginPage() {
         </div>
         <div className="glass rounded-2xl p-8">
           <button
-            onClick={() => signIn("google", { callbackUrl: "/pages/dashboard" })}
+            onClick={() => signIn("google")}
             className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-border rounded-xl bg-background/50 hover:bg-accent transition-colors mb-6 cursor-pointer"
           >
             <GoogleIcon />

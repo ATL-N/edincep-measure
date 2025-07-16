@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -42,6 +42,18 @@ export default function SignupPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
 
+  useEffect(() => {
+    if (status === "authenticated") {
+      if (session.user.role === "ADMIN") {
+        router.push("/pages/admin/dashboard");
+      } else if (session.user.role === "CLIENT") {
+        router.push("/pages/client/dashboard");
+      } else {
+        router.push("/"); // Default fallback
+      }
+    }
+  }, [session, status, router]);
+
   const handleEmailSignup = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -77,7 +89,7 @@ export default function SignupPage() {
         );
         setIsLoading(false);
       } else {
-        router.push("/");
+        // Redirection is now handled by the useEffect hook
       }
     } catch (err) {
       setError(err.message);
@@ -104,7 +116,6 @@ export default function SignupPage() {
           <button
             onClick={() => signIn("google")}
             className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-border rounded-xl bg-background/50 hover:bg-accent transition-colors mb-6 cursor-pointer"
-          >
             <GoogleIcon />
             <span className="font-medium text-foreground">
               Sign up with Google
