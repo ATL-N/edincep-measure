@@ -10,9 +10,15 @@ async function main() {
   // Create a designer user
   const designer = await prisma.user.create({
     data: {
-      name: "Tom Designer",
-      email: "designer@example.com",
+      name: "Pat Pat",
+      email: "patience@enyaah.com",
       role: "DESIGNER",
+      hashedPassword: await bcrypt.hash("password", 10),
+    },
+    data: {
+      name: "admin admin",
+      email: "admin@admin.com",
+      role: "ADMIN",
       hashedPassword: await bcrypt.hash("password", 10),
     },
   });
