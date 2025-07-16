@@ -1,6 +1,7 @@
 // app/api/clients/[id]/route.js
 import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/session";
 
 const prisma = new PrismaClient();
 
@@ -23,6 +24,13 @@ const countFilledMeasurements = (measurement) => {
     }
   }
   return count;
+};
+
+// Helper to get IP and OS from request
+const getClientInfo = (request) => {
+  const ipAddress = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || request.ip;
+  const os = request.headers.get("user-agent");
+  return { ipAddress, os };
 };
 
 // GET single client with detailed measurements
@@ -61,42 +69,15 @@ export async function GET(request, { params }) {
   }
 }
 
-// export async function GET(request, { params }) {
-//   try {
-//     const { id } = params;
-
-//     const client = await prisma.client.findUnique({
-//       where: { id },
-//       include: {
-//         // This is the key change: we include the most recent measurement
-//         measurements: {
-//           orderBy: { createdAt: "desc" },
-//           take: 1,
-//         },
-//       },
-//     });
-
-//     if (!client) {
-//       return NextResponse.json({ error: "Client not found" }, { status: 404 });
-//     }
-
-//     // The client object will now have a `measurements` array
-//     // with either one item (the latest) or be empty.
-//     return NextResponse.json(client);
-//   } catch (error) {
-//     console.error("Error fetching client:", error);
-//     return NextResponse.json(
-//       { error: "Failed to fetch client" },
-//       { status: 500 }
-//     );
-//   }
-// }
-
-
-
 // PUT update client (NEW)
 export async function PUT(request, { params }) {
   try {
+    const currentUser = await getCurrentUser(request);
+
+    if (!currentUser || (currentUser.role !== "DESIGNER" && currentUser.role !== "ADMIN") || currentUser.status !== "ACTIVE") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = params;
     const body = await request.json();
     const { firstName, lastName, phone, email, address, notes, status } = body;
@@ -108,6 +89,11 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
+    const existingClient = await prisma.client.findUnique({ where: { id } });
+    if (!existingClient) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
+
     const client = await prisma.client.update({
       where: { id },
       data: {
@@ -117,6 +103,23 @@ export async function PUT(request, { params }) {
         address,
         notes,
         status,
+      },
+    });
+
+    const { ipAddress, os } = getClientInfo(request);
+    await prisma.log.create({
+      data: {
+        userId: currentUser.id,
+        action: "CLIENT_UPDATE",
+        ipAddress,
+        os,
+        details: {
+          clientId: client.id,
+          oldClientName: existingClient.name,
+          newClientName: client.name,
+          oldStatus: existingClient.status,
+          newStatus: client.status,
+        },
       },
     });
 
@@ -136,10 +139,35 @@ export async function PUT(request, { params }) {
 // DELETE client
 export async function DELETE(request, { params }) {
   try {
+    const currentUser = await getCurrentUser(request);
+
+    if (!currentUser || (currentUser.role !== "DESIGNER" && currentUser.role !== "ADMIN") || currentUser.status !== "ACTIVE") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = params;
+
+    const existingClient = await prisma.client.findUnique({ where: { id } });
+    if (!existingClient) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
 
     await prisma.client.delete({
       where: { id },
+    });
+
+    const { ipAddress, os } = getClientInfo(request);
+    await prisma.log.create({
+      data: {
+        userId: currentUser.id,
+        action: "CLIENT_DELETE",
+        ipAddress,
+        os,
+        details: {
+          clientId: id,
+          clientName: existingClient.name,
+        },
+      },
     });
 
     return NextResponse.json({ message: "Client deleted successfully" });

@@ -13,6 +13,7 @@ import {
   CogIcon,
   SunIcon,
   MoonIcon,
+  DocumentTextIcon,
 } from "@heroicons/react/24/outline";
 import {
   HomeIcon as HomeIconSolid,
@@ -20,6 +21,7 @@ import {
   PlusIcon as PlusIconSolid,
   ChartBarIcon as ChartBarIconSolid,
   CogIcon as CogIconSolid,
+  DocumentTextIcon as DocumentTextIconSolid,
 } from "@heroicons/react/24/solid";
 
 const getNavigation = (role) => {
@@ -27,10 +29,28 @@ const getNavigation = (role) => {
     case "ADMIN":
       return [
         {
-          name: "Users",
+          name: "Dashboard",
           href: "/pages/admin/dashboard",
+          icon: HomeIcon,
+          iconSolid: HomeIconSolid,
+        },
+        {
+          name: "Analytics",
+          href: "/pages/admin/analytics",
+          icon: ChartBarIcon,
+          iconSolid: ChartBarIconSolid,
+        },
+        {
+          name: "Users",
+          href: "/pages/admin/users",
           icon: UsersIcon,
           iconSolid: UsersIconSolid,
+        },
+        {
+          name: "Logs",
+          href: "/pages/admin/logs",
+          icon: DocumentTextIcon,
+          iconSolid: DocumentTextIconSolid,
         },
       ];
     case "DESIGNER":
@@ -60,21 +80,29 @@ const getNavigation = (role) => {
           iconSolid: CogIconSolid,
         },
       ];
-    default:
+    case "CLIENT":
       return [
         {
           name: "Dashboard",
-          href: "/pages/clients/dashboard",
+          href: "/client/dashboard",
           icon: HomeIcon,
           iconSolid: HomeIconSolid,
         },
         {
-          name: "Settings",
-          href: "/pages/settings",
-          icon: CogIcon,
-          iconSolid: CogIconSolid,
+          name: "Profile",
+          href: "/client/profile",
+          icon: UsersIcon,
+          iconSolid: UsersIconSolid,
+        },
+        {
+          name: "Measurements",
+          href: "/client/measurements",
+          icon: DocumentTextIcon,
+          iconSolid: DocumentTextIconSolid,
         },
       ];
+    default:
+      return [];
   }
 };
 
@@ -88,6 +116,27 @@ const getMobileNavigation = (role) => {
           icon: HomeIcon,
           iconSolid: HomeIconSolid,
           label: "Home",
+        },
+        {
+          name: "Analytics",
+          href: "/pages/admin/analytics",
+          icon: ChartBarIcon,
+          iconSolid: ChartBarIconSolid,
+          label: "Analytics",
+        },
+        {
+          name: "Users",
+          href: "/pages/admin/users",
+          icon: UsersIcon,
+          iconSolid: UsersIconSolid,
+          label: "Users",
+        },
+        {
+          name: "Logs",
+          href: "/pages/admin/logs",
+          icon: DocumentTextIcon,
+          iconSolid: DocumentTextIconSolid,
+          label: "Logs",
         },
         {
           name: "Settings",
@@ -135,23 +184,32 @@ const getMobileNavigation = (role) => {
           label: "Settings",
         },
       ];
-    default:
+    case "CLIENT":
       return [
         {
           name: "Dashboard",
-          href: "/pages/clients/dashboard",
+          href: "/client/dashboard",
           icon: HomeIcon,
           iconSolid: HomeIconSolid,
           label: "Home",
         },
         {
-          name: "Settings",
-          href: "/pages/settings",
-          icon: CogIcon,
-          iconSolid: CogIconSolid,
-          label: "Settings",
+          name: "Profile",
+          href: "/client/profile",
+          icon: UsersIcon,
+          iconSolid: UsersIconSolid,
+          label: "Profile",
+        },
+        {
+          name: "Measurements",
+          href: "/client/measurements",
+          icon: DocumentTextIcon,
+          iconSolid: DocumentTextIconSolid,
+          label: "History",
         },
       ];
+    default:
+      return [];
   }
 };
 

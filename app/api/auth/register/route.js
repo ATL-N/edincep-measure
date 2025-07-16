@@ -52,6 +52,18 @@ export async function POST(request) {
       },
     });
 
+    // 5. Log the registration event
+    const ip = request.headers.get("x-forwarded-for");
+    const os = request.headers.get("user-agent");
+    await prisma.log.create({
+      data: {
+        userId: user.id,
+        action: "USER_REGISTRATION",
+        ipAddress: ip,
+        os: os,
+      },
+    });
+
     // We don't want to return the hashed password to the client
     const { hashedPassword: _, ...userWithoutPassword } = user;
 

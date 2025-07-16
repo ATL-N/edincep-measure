@@ -191,7 +191,7 @@ function transformMeasurementData(measurement) {
 // GET single measurement session
 export async function GET(request, { params }) {
   try {
-    const { id: clientId, sessionId } = params;
+    const { id: clientId, sessionId } = await params;
 
     const session = await prisma.measurement.findUnique({
       where: { id: sessionId, clientId: clientId }, // Ensure session belongs to the client

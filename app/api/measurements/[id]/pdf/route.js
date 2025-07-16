@@ -1,311 +1,147 @@
-// app/api/measurements/[id]/pdf/route.js
-
+// @/app/api/measurements/[id]/pdf/route.js
 import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
-import PDFDocument from "pdfkit";
-import { Readable } from "stream";
+import { getCurrentUser } from "@/lib/session";
+import { jsPDF } from "jspdf";
+import autoTable from 'jspdf-autotable';
 
 const prisma = new PrismaClient();
 
-// A mapping to define categories and display names for each measurement field.
-const measurementDefinitions = {
-  // Vertical Measurements
-  shoulderToChest: {
-    category: "length",
-    name: "Shoulder to Chest",
-    description: "From shoulder top to the chest line.",
-  },
-  shoulderToBust: {
-    category: "length",
-    name: "Shoulder to Bust",
-    description: "Shoulder to the fullest part of the bust.",
-  },
-  shoulderToUnderbust: {
-    category: "length",
-    name: "Shoulder to Underbust",
-    description: "Shoulder to underbust line over the bust.",
-  },
-  shoulderToWaistFront: {
-    category: "length",
-    name: "Shoulder to Waist (Front)",
-    description: "Shoulder at the neck to waist over the bust.",
-  },
-  shoulderToWaistBack: {
-    category: "length",
-    name: "Shoulder to Waist (Back)",
-    description: "From the nape of the neck to the waist.",
-  },
-  waistToHip: {
-    category: "length",
-    name: "Waist to Hip",
-    description: "From natural waist to the fullest part of the hip.",
-  },
-  shoulderToKnee: {
-    category: "length",
-    name: "Shoulder to Knee",
-    description: "From shoulder top to the knee.",
-  },
-  shoulderToDressLength: {
-    category: "length",
-    name: "Dress Length",
-    description: "Shoulder to the desired dress length.",
-  },
-  shoulderToAnkle: {
-    category: "length",
-    name: "Shoulder to Ankle",
-    description: "From shoulder top to the ankle.",
-  },
-
-  // Width Measurements
-  shoulderWidth: {
-    category: "width",
-    name: "Shoulder Width",
-    description: "From one shoulder edge to the other.",
-  },
-  nippleToNipple: {
-    category: "width",
-    name: "Nipple to Nipple",
-    description: "Distance between the bust points.",
-  },
-  offShoulder: {
-    category: "width",
-    name: "Off Shoulder",
-    description: "Measurement for off-shoulder styles.",
-  },
-
-  // Circumference Measurements
-  bust: {
-    category: "circumference",
-    name: "Bust",
-    description: "Around the fullest part of the bust.",
-  },
-  underBust: {
-    category: "circumference",
-    name: "Under Bust",
-    description: "Around the torso, directly under the bust.",
-  },
-  waist: {
-    category: "circumference",
-    name: "Waist",
-    description: "Around the natural waistline.",
-  },
-  hip: {
-    category: "circumference",
-    name: "Hip",
-    description: "Around the fullest part of the hips.",
-  },
-  thigh: {
-    category: "circumference",
-    name: "Thigh",
-    description: "Around the fullest part of the thigh.",
-  },
-  knee: {
-    category: "circumference",
-    name: "Knee",
-    description: "Around the knee.",
-  },
-  ankle: {
-    category: "circumference",
-    name: "Ankle",
-    description: "Around the ankle bone.",
-  },
-  neck: {
-    category: "circumference",
-    name: "Neck",
-    description: "Around the base of the neck.",
-  },
-
-  // Arm Measurements
-  shirtSleeve: {
-    category: "arm",
-    name: "Shirt Sleeve",
-    description: "Shoulder to the desired short sleeve length.",
-  },
-  elbowLength: {
-    category: "arm",
-    name: "Elbow Length",
-    description: "Shoulder to the elbow.",
-  },
-  longSleeves: {
-    category: "arm",
-    name: "Long Sleeves",
-    description: "Shoulder to the wrist.",
-  },
-  aroundArm: {
-    category: "arm",
-    name: "Around Arm",
-    description: "Around the fullest part of the bicep.",
-  },
-  elbow: {
-    category: "arm",
-    name: "Elbow Circumference",
-    description: "Around the elbow.",
-  },
-  wrist: {
-    category: "arm",
-    name: "Wrist",
-    description: "Around the wrist bone.",
-  },
-
-  // Leg Measurements
-  inSeam: {
-    category: "leg",
-    name: "Inseam",
-    description: "From the crotch to the desired pants length.",
-  },
-  outSeam: {
-    category: "leg",
-    name: "Outseam",
-    description: "From the waist to the desired pants length.",
-  },
-};
-
-// Function to transform flat Prisma data into the categorized structure for the UI.
-function transformMeasurementData(measurement) {
-  const categorized = {};
-
-  for (const baseName in measurementDefinitions) {
-    const snugField = `${baseName}Snug`;
-    const staticField = `${baseName}Static`;
-    const dynamicField = `${baseName}Dynamic`;
-
-    if (
-      measurement[snugField] !== null ||
-      measurement[staticField] !== null ||
-      measurement[dynamicField] !== null
-    ) {
-      const { category, name, description } = measurementDefinitions[baseName];
-      if (!categorized[category]) {
-        categorized[category] = [];
-      }
-      categorized[category].push({
-        name,
-        description,
-        snug: measurement[snugField],
-        static: measurement[staticField],
-        dynamic: measurement[dynamicField],
-        unit: "in", // Assuming inches, can be made dynamic if needed
-      });
-    }
-  }
-  return categorized;
-}
-
 export async function GET(request, { params }) {
+  const { id } = params;
+  const user = await getCurrentUser(request);
+  console.log('sdsfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', id)
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
-    const { id: sessionId } = params;
-
-    const session = await prisma.measurement.findUnique({
-      where: { id: sessionId },
-      include: {
-        client: {
-          select: {
-            name: true,
-            phone: true,
-            email: true,
-          },
-        },
-        creator: {
-          select: {
-            name: true,
-            email: true,
-          },
-        },
-      },
+    const measurement = await prisma.measurement.findFirst({
+      where: { id: id },
+      include: { client: true },
     });
 
-    if (!session) {
-      return new NextResponse("Measurement session not found", { status: 404 });
+    if (!measurement) {
+      return NextResponse.json({ error: "Measurement not found" }, { status: 404 });
     }
 
-    const doc = new PDFDocument({
-      size: "A4",
-      margin: 50,
-      info: {
-        Title: `Measurement Session for ${session.client.name}`,
-        Author: "Edincep Measure",
-      },
+    const doc = new jsPDF();
+    
+    // --- Helper Functions ---
+    const formatName = (key) => {
+        return key.replace(/([A-Z])/g, ' $1').trim();
+    };
+
+    const getCategory = (name) => {
+        const lowerCaseName = name.toLowerCase();
+        if (lowerCaseName.includes('sleeve')) return 'Sleeves';
+        if (lowerCaseName.includes('length') || lowerCaseName.includes('seam') || lowerCaseName.startsWith('shoulder') || lowerCaseName.startsWith('waistto')) return 'Lengths & Heights';
+        if (lowerCaseName.includes('width') || lowerCaseName.includes('nipple')) return 'Widths';
+        const circumferences = ['bust', 'underbust', 'waist', 'hip', 'thigh', 'knee', 'ankle', 'neck', 'arm', 'elbow', 'wrist'];
+        if (circumferences.some(c => lowerCaseName.includes(c))) return 'Circumferences';
+        return 'Other';
+    };
+
+    // --- Data Restructuring ---
+    const categorizedData = {};
+    const nonMeasurementKeys = new Set(['id', 'clientId', 'creatorId', 'status', 'completionDeadline', 'materialImageUrl', 'designImageUrl', 'notes', 'createdAt', 'updatedAt', 'client']);
+    
+    for (const key in measurement) {
+        if (nonMeasurementKeys.has(key) || measurement[key] === null) continue;
+
+        let baseName = key;
+        let fitType = 'value';
+
+        if (key.endsWith('Snug')) {
+            baseName = key.slice(0, -4);
+            fitType = 'Snug';
+        } else if (key.endsWith('Static')) {
+            baseName = key.slice(0, -6);
+            fitType = 'Static';
+        } else if (key.endsWith('Dynamic')) {
+            baseName = key.slice(0, -7);
+            fitType = 'Dynamic';
+        }
+
+        const category = getCategory(baseName);
+        const displayName = formatName(baseName);
+
+        if (!categorizedData[category]) categorizedData[category] = {};
+        if (!categorizedData[category][displayName]) categorizedData[category][displayName] = {};
+        
+        categorizedData[category][displayName][fitType] = measurement[key];
+    }
+
+    // --- PDF Generation ---
+    // const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.text("Measurement Details", 14, 22);
+    doc.setFontSize(11);
+    doc.text(`Client: ${measurement.client.name}`, 14, 32);
+    doc.text(`Date: ${new Date(measurement.createdAt).toLocaleDateString()}`, 14, 38);
+    doc.text(`Status: ${measurement.status.replace(/_/g, ' ').toLowerCase()}`, 14, 44);
+
+    let yPos = 55;
+
+    if (measurement.notes) {
+        doc.setFontSize(12);
+        doc.text("Session Notes:", 14, yPos);
+        yPos += 7;
+        doc.setFontSize(10);
+        const notesLines = doc.splitTextToSize(measurement.notes, 180);
+        doc.text(notesLines, 14, yPos);
+        yPos += (notesLines.length * 4) + 10; // Adjust space after notes
+    }
+
+    const tableData = [];
+    const categoryOrder = ['Lengths & Heights', 'Widths', 'Circumferences', 'Sleeves', 'Other'];
+
+    for (const category of categoryOrder) {
+        if (!categorizedData[category]) continue;
+
+        // Add a header row for the category
+        tableData.push([{ content: category, colSpan: 4, styles: { fontStyle: 'bold', fillColor: [230, 230, 230] } }]);
+
+        for (const name in categorizedData[category]) {
+            const fits = categorizedData[category][name];
+            tableData.push([
+                name,
+                fits.Snug !== undefined ? fits.Snug : '-',
+                fits.Static !== undefined ? fits.Static : '-',
+                fits.Dynamic !== undefined ? fits.Dynamic : '-',
+            ]);
+        }
+    }
+
+    autoTable(doc, {
+        startY: yPos,
+        head: [['Measurement', 'Snug', 'Static', 'Dynamic']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [41, 128, 185] },
+        didParseCell: function (data) {
+            if (data.row.raw?.[0]?.styles) { // Check for our category row
+                data.cell.styles.halign = 'center';
+            }
+        }
     });
 
-    const stream = new Readable();
-    stream._read = () => {}; // _read is required but can be a no-op
-    doc.on("data", (chunk) => stream.push(chunk));
-    doc.on("end", () => stream.push(null));
+    const pdfBuffer = doc.output("arraybuffer");
 
-    // Header
-    doc.fontSize(24).font("Helvetica-Bold").text("Edincep Measure", { align: "center" });
-    doc.fontSize(12).font("Helvetica").text("Precision Tailoring & Design", { align: "center" });
-    doc.moveDown();
-
-    // Client Information
-    doc.fontSize(16).font("Helvetica-Bold").text(`Client: ${session.client.name}`);
-    doc.fontSize(10).font("Helvetica").text(`Email: ${session.client.email || 'N/A'}`);
-    doc.text(`Phone: ${session.client.phone || 'N/A'}`);
-    doc.moveDown();
-
-    // Session Details
-    doc.fontSize(14).font("Helvetica-Bold").text("Session Details");
-    doc.fontSize(10).font("Helvetica").text(`Session ID: ${session.id}`);
-    doc.text(`Created By: ${session.creator.name || 'N/A'} (${session.creator.email || 'N/A'})`);
-    doc.text(`Date: ${new Date(session.createdAt).toLocaleDateString()}`);
-    doc.text(`Order Status: ${session.status.replace(/_/g, ' ')}`);
-    doc.text(`Completion Deadline: ${session.completionDeadline ? new Date(session.completionDeadline).toLocaleDateString() : 'N/A'}`);
-    doc.moveDown();
-
-    // Notes
-    if (session.notes) {
-      doc.fontSize(12).font("Helvetica-Bold").text("Notes:");
-      doc.fontSize(10).font("Helvetica").text(session.notes);
-      doc.moveDown();
-    }
-
-    // Images
-    if (session.materialImageUrl || session.designImageUrl) {
-      doc.fontSize(12).font("Helvetica-Bold").text("Associated Images:");
-      if (session.materialImageUrl) {
-        // For local files, you might need to adjust the path to be absolute
-        // For simplicity, this example assumes the image is accessible via a URL or a direct path from the server's perspective
-        // In a real app, you'd likely fetch the image and embed it, or use a full URL.
-        // For now, just display the URL.
-        doc.fontSize(10).font("Helvetica").text(`Material Image: ${process.cwd()}/public${session.materialImageUrl}`);
-        // Example of embedding an image (requires 'fs' or 'https' to read the image data)
-        // doc.image(`${process.cwd()}/public${session.materialImageUrl}`, { fit: [200, 200], align: 'center' });
-      }
-      if (session.designImageUrl) {
-        doc.fontSize(10).font("Helvetica").text(`Design Image: ${process.cwd()}/public${session.designImageUrl}`);
-        // doc.image(`${process.cwd()}/public${session.designImageUrl}`, { fit: [200, 200], align: 'center' });
-      }
-      doc.moveDown();
-    }
-
-    // Measurements
-    doc.fontSize(14).font("Helvetica-Bold").text("Measurements");
-    const transformedMeasurements = transformMeasurementData(session);
-
-    for (const category in transformedMeasurements) {
-      doc.fontSize(12).font("Helvetica-Bold").text(`${category.charAt(0).toUpperCase() + category.slice(1)} Measurements:`);
-      doc.moveDown(0.5);
-
-      transformedMeasurements[category].forEach((m) => {
-        doc.fontSize(10).font("Helvetica-Bold").text(`${m.name}:`);
-        doc.font("Helvetica").text(`  Snug: ${m.snug || 'N/A'} ${m.unit}`);
-        doc.text(`  Static: ${m.static || 'N/A'} ${m.unit}`);
-        doc.text(`  Dynamic: ${m.dynamic || 'N/A'} ${m.unit}`);
-        doc.moveDown(0.5);
-      });
-      doc.moveDown();
-    }
-
-    doc.end();
-
-    return new NextResponse(stream, {
+    return new NextResponse(pdfBuffer, {
+      status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="measurement_session_${sessionId}.pdf"`,
+        "Content-Disposition": `attachment; filename="measurement-${id}.pdf"`,
       },
     });
+
   } catch (error) {
     console.error("Error generating PDF:", error);
-    return new NextResponse("Failed to generate PDF", { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to generate PDF" },
+      { status: 500 }
+    );
   }
 }

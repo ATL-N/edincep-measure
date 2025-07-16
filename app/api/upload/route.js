@@ -3,9 +3,26 @@
 import { NextResponse } from "next/server";
 import { writeFile } from "fs/promises";
 import { join } from "path";
+import { getCurrentUser } from "@/lib/session";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+// Helper to get IP and OS from request
+const getClientInfo = (request) => {
+  const ipAddress = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || request.ip;
+  const os = request.headers.get("user-agent");
+  return { ipAddress, os };
+};
 
 export async function POST(request) {
   try {
+    const currentUser = await getCurrentUser(request);
+
+    if (!currentUser || (currentUser.role !== "DESIGNER" && currentUser.role !== "ADMIN") || currentUser.status !== "ACTIVE") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const data = await request.formData();
     const file = data.get("file");
 
@@ -21,6 +38,20 @@ export async function POST(request) {
     const path = join(process.cwd(), "public/uploads", filename);
 
     await writeFile(path, buffer);
+
+    const { ipAddress, os } = getClientInfo(request);
+    await prisma.log.create({
+      data: {
+        userId: currentUser.id,
+        action: "FILE_UPLOAD",
+        ipAddress,
+        os,
+        details: {
+          filename: file.name,
+          filePath: `/uploads/${filename}`,
+        },
+      },
+    });
 
     return NextResponse.json({ 
       success: true, 

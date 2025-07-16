@@ -9,6 +9,16 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+// A helper function to create logs to keep the authorize function clean
+async function createLog(data) {
+  try {
+    await prisma.log.create({ data });
+  } catch (error) {
+    // For production, you'd want more robust error handling here
+    console.error("Failed to create log:", error);
+  }
+}
+
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
 
@@ -34,80 +44,146 @@ export const authOptions = {
         email: { label: "Email", type: "text" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+      // IMPORTANT: The authorize function can accept a second argument: the request object
+      async authorize(credentials, req) {
+        // Get IP and User-Agent from the request headers
+        const ip =
+          req.headers["x-forwarded-for"] ||
+          req.headers["x-real-ip"] ||
+          req.socket.remoteAddress;
+        const os = req.headers["user-agent"];
+        const email = credentials?.email;
+
+        if (!email || !credentials?.password) {
+          // You can log this as well, though it's less critical
           throw new Error("Invalid credentials.");
         }
+
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email },
         });
+
+        // Case 1: User not found
         if (!user || !user.hashedPassword) {
+          await createLog({
+            action: "LOGIN_FAILED_USER_NOT_FOUND",
+            ipAddress: ip,
+            os: os,
+            details: { email }, // Log the email that was attempted
+          });
           throw new Error("Invalid credentials.");
         }
-        // Check if the user is soft-deleted
-        if (user.status === "DELETED") {
-          throw new Error("Your account has been deactivated.");
-        }
+
         const isPasswordCorrect = await bcrypt.compare(
           credentials.password,
           user.hashedPassword
         );
+
+        // Case 2: Incorrect password
         if (!isPasswordCorrect) {
+          await createLog({
+            userId: user.id, // We have the user ID here
+            action: "LOGIN_FAILED_WRONG_PASSWORD",
+            ipAddress: ip,
+            os: os,
+            details: { email },
+          });
           throw new Error("Invalid credentials.");
         }
+
+        // Case 3: Successful login
+        await createLog({
+          userId: user.id,
+          action: "USER_LOGIN_SUCCESS",
+          ipAddress: ip,
+          os: os,
+        });
+
         return user;
       },
     }),
   ],
 
   session: {
-    strategy: "database",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    strategy: "jwt",
   },
 
   callbacks: {
-    // For database sessions, we need to fetch the user data from the database
-    async session({ session, user }) {
-      if (session?.user && user) {
-        // The 'user' parameter contains the full user object from the database
-        session.user.id = user.id;
-        session.user.role = user.role;
-        session.user.status = user.status; // Include user status
+    async session({ session, token }) {
+      if (token) {
+        session.user.id = token.id;
+        session.user.role = token.role;
+        session.user.status = token.status;
+        session.user.clientId = token.clientId; // <-- Add clientId to session
       }
       return session;
     },
-
-    // This callback runs when a user signs in
-    async signIn({ user, account, profile }) {
-      // You can add any additional logic here if needed
-      return true;
+    async jwt({ token, user }) {
+      if (user) {
+        // On sign-in, fetch the client profile if the user is a CLIENT
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          include: { clientProfile: true },
+        });
+        token.id = dbUser.id;
+        token.role = dbUser.role;
+        token.status = dbUser.status;
+        // If a client profile exists, add its ID to the token
+        if (dbUser.clientProfile) {
+          token.clientId = dbUser.clientProfile.id;
+        }
+      }
+      return token;
     },
   },
 
-  // jwt: {
-  //   encode: async function (params) {
-  //     if (params.token?.credentials) {
-  //       const sessionToken = uuid();
+  // Events block to capture all logins (including Google OAuth)
+  events: {
+    async signIn(message) {
+      if (message.user) {
+        // Different approaches to get IP and User-Agent in events callback
+        let ip = "unknown";
+        let os = "unknown";
 
-  //       if (!params.token.sub) {
-  //         throw new Error("No user ID found in token");
-  //       }
+        // Try to get from various possible locations
+        if (message.request) {
+          // For Next.js App Router
+          ip =
+            message.request.headers?.get?.("x-forwarded-for") ||
+            message.request.headers?.get?.("x-real-ip") ||
+            message.request.headers?.get?.("cf-connecting-ip") ||
+            message.request.ip ||
+            message.request.connection?.remoteAddress ||
+            "unknown";
 
-  //       const createdSession = await adapter?.createSession?.({
-  //         sessionToken: sessionToken,
-  //         userId: params.token.sub,
-  //         expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-  //       });
+          os = message.request.headers?.get?.("user-agent") || "unknown";
 
-  //       if (!createdSession) {
-  //         throw new Error("Failed to create session");
-  //       }
+          // If the above doesn't work, try direct property access
+          if (ip === "unknown" && message.request.headers) {
+            ip =
+              message.request.headers["x-forwarded-for"] ||
+              message.request.headers["x-real-ip"] ||
+              message.request.headers["cf-connecting-ip"] ||
+              "unknown";
+          }
 
-  //       return sessionToken;
-  //     }
-  //     return defaultEncode(params);
-  //   },
-  // },
+          if (os === "unknown" && message.request.headers) {
+            os = message.request.headers["user-agent"] || "unknown";
+          }
+        }
+
+        // Only log if this is a Google OAuth login (credentials login is already logged in authorize)
+        if (message.account?.provider === "google") {
+          await createLog({
+            userId: message.user.id,
+            action: "USER_LOGIN_SUCCESS",
+            ipAddress: ip,
+            os: os,
+          });
+        }
+      }
+    },
+  },
 
   pages: {
     signIn: "/login",

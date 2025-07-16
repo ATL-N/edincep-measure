@@ -33,11 +33,18 @@ const countFilledMeasurements = (measurement) => {
   return count;
 };
 
+// Helper to get IP and OS from request
+const getClientInfo = (request) => {
+  const ipAddress = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || request.ip;
+  const os = request.headers.get("user-agent");
+  return { ipAddress, os };
+};
+
 // GET all measurements for a client (SECURED)
 export async function GET(request, { params }) {
   try {
     // Authenticate the user
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(request);
     if (!user || (user.role !== "DESIGNER" && user.role !== "ADMIN")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -95,8 +102,8 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   try {
     // 1. Authenticate user
-    const user = await getCurrentUser();
-    if (!user || (user.role !== "DESIGNER" && user.role !== "ADMIN")) {
+    const currentUser = await getCurrentUser(request);
+    if (!currentUser || (currentUser.role !== "DESIGNER" && currentUser.role !== "ADMIN") || currentUser.status !== "ACTIVE") {
       return NextResponse.json(
         { error: "Unauthorized to create measurements" },
         { status: 401 }
@@ -107,10 +114,10 @@ export async function POST(request, { params }) {
     const clientId = params.id;
 
     // 3. Authorize: Verify the designer is assigned to this client (Admins can bypass)
-    if (user.role === "DESIGNER") {
+    if (currentUser.role === "DESIGNER") {
       const isAssigned = await prisma.clientDesigner.findUnique({
         where: {
-          clientId_designerId: { clientId, designerId: user.id },
+          clientId_designerId: { clientId, designerId: currentUser.id },
         },
       });
       if (!isAssigned) {
@@ -157,7 +164,7 @@ export async function POST(request, { params }) {
     const newMeasurement = await prisma.measurement.create({
       data: {
         clientId,
-        creatorId: user.id,
+        creatorId: currentUser.id,
         notes,
         status: status || "ORDER_CONFIRMED",
         completionDeadline: completionDeadline
@@ -167,6 +174,21 @@ export async function POST(request, { params }) {
         designImageUrl,
         // Spread the sanitized, correctly-typed measurement data
         ...sanitizedMeasurements,
+      },
+    });
+
+    // Log the measurement creation event
+    const { ipAddress, os } = getClientInfo(request);
+    await prisma.log.create({
+      data: {
+        userId: currentUser.id,
+        action: "MEASUREMENT_CREATE",
+        ipAddress,
+        os,
+        details: {
+          measurementId: newMeasurement.id,
+          clientId: clientId,
+        },
       },
     });
 
@@ -186,8 +208,8 @@ export async function POST(request, { params }) {
 export async function PUT(request, { params }) {
   try {
     // 1. Authenticate user
-    const user = await getCurrentUser();
-    if (!user || (user.role !== "DESIGNER" && user.role !== "ADMIN")) {
+    const currentUser = await getCurrentUser(request);
+    if (!currentUser || (currentUser.role !== "DESIGNER" && currentUser.role !== "ADMIN") || currentUser.status !== "ACTIVE") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -239,13 +261,28 @@ export async function PUT(request, { params }) {
     const whereClause = {
       id: measurementId,
       // Security: Admins can update any measurement, designers only their own
-      ...(user.role === "DESIGNER" && { creatorId: user.id }),
+      ...(currentUser.role === "DESIGNER" && { creatorId: currentUser.id }),
     };
 
     // 5. Update the measurement
     const updatedMeasurement = await prisma.measurement.update({
       where: whereClause,
       data: dataToUpdate,
+    });
+
+    // Log the measurement update event
+    const { ipAddress, os } = getClientInfo(request);
+    await prisma.log.create({
+      data: {
+        userId: currentUser.id,
+        action: "MEASUREMENT_UPDATE",
+        ipAddress,
+        os,
+        details: {
+          measurementId: updatedMeasurement.id,
+          clientId: updatedMeasurement.clientId,
+        },
+      },
     });
 
     return NextResponse.json(updatedMeasurement);

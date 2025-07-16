@@ -39,7 +39,7 @@ model User {
 
   // --- Auth.js relations ---
   accounts Account[]
-  sessions Session[]
+  logs     Log[]
 
   // --- Application-specific relations ---
   // If the user IS a client, this links to their client profile.
@@ -76,15 +76,6 @@ model Account {
   @@unique([provider, providerAccountId])
 }
 
-// Model for managing user login sessions.
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
 // Model for "magic link" email sign-ins.
 model VerificationToken {
   identifier String
@@ -92,6 +83,24 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// ------------------------------------
+// --- LOGGING & AUDITING ---
+// ------------------------------------
+
+model Log {
+  id        String   @id @default(cuid())
+  userId    String?  // <-- Change this from String to String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade) // <-- Change User to User?
+  ipAddress String?
+  os        String?
+  action    String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("logs")
 }
 
 

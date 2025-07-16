@@ -6,6 +6,13 @@ import { getCurrentUser } from "@/lib/session";
 
 const prisma = new PrismaClient();
 
+// Helper to get IP and OS from request
+const getClientInfo = (request) => {
+  const ipAddress = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || request.ip;
+  const os = request.headers.get("user-agent");
+  return { ipAddress, os };
+};
+
 // GET all clients for the LOGGED-IN DESIGNER or all clients for ADMIN
 export async function GET(request) {
   try {
@@ -114,13 +121,27 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     // 1. Authenticate the user using the session helper
-    const user = await getCurrentUser(request);
+    const sessionUser = await getCurrentUser(request);
 
-    console.log("User from session in POST:", user);
-
-    // 2. Authorize the user
-    if (!user || user.role !== "DESIGNER") {
+    // 2. Authorize the user: check if they are logged in via session
+    if (!sessionUser?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // 3. Fetch the user from the database to verify role and status
+    const user = await prisma.user.findUnique({
+      where: { id: sessionUser.id },
+    });
+
+    // 4. Authorize based on the database record
+    if (!user || user.role !== "DESIGNER" || user.status !== "ACTIVE") {
+      return NextResponse.json(
+        {
+          error:
+            "Unauthorized: Your account may be inactive or lacks the necessary permissions.",
+        },
+        { status: 401 }
+      );
     }
     const designerId = user.id;
 
@@ -207,6 +228,21 @@ export async function POST(request) {
       return newClient;
     });
 
+    // Log the client creation event
+    const { ipAddress, os } = getClientInfo(request);
+    await prisma.log.create({
+      data: {
+        userId: user.id,
+        action: "CLIENT_CREATE",
+        ipAddress,
+        os,
+        details: {
+          clientId: client.id,
+          clientName: client.name,
+          designerId: designerId,
+        },
+      },
+    });
 
     // 6. Return the newly created client
     return NextResponse.json(client, { status: 201 });

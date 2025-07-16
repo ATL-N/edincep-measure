@@ -1,4 +1,3 @@
-// app/pages/clients/[id]/measurements/[sessionId]/page.jsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -10,7 +9,6 @@ import {
   FileText,
   Ruler,
   User,
-  Edit3,
   Download,
   Share,
   AlertTriangle,
@@ -42,7 +40,7 @@ const MeasurementDetailSkeleton = () => (
 );
 
 export default function MeasurementDetailPage() {
-  const { id, sessionId } = useParams();
+  const { sessionId } = useParams();
   const router = useRouter();
   const [session, setSession] = useState(null);
   const [client, setClient] = useState(null);
@@ -50,22 +48,18 @@ export default function MeasurementDetailPage() {
   const [error, setError] = useState(null);
   const [activeCategory, setActiveCategory] = useState("all");
   const [expandedCategories, setExpandedCategories] = useState({});
-  const [isEditingStatus, setIsEditingStatus] = useState(false);
   const [currentStatus, setCurrentStatus] = useState("");
-  const [currentCompletionDeadline, setCurrentCompletionDeadline] = useState("");
   const [pdfUrl, setPdfUrl] = useState(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
-    if (!id || !sessionId) return;
+    if (!sessionId) return;
     const fetchSession = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch(
-          `/api/clients/${id}/measurements/${sessionId}`
-        );
+        const response = await fetch(`/api/client/measurements/${sessionId}`);
         if (!response.ok) {
           const errData = await response.json();
           throw new Error(errData.error || "Failed to load session data.");
@@ -74,7 +68,6 @@ export default function MeasurementDetailPage() {
         setClient(data.client);
         setSession(data.session);
         setCurrentStatus(data.session.status || "ORDER_CONFIRMED");
-        setCurrentCompletionDeadline(data.session.completionDeadline ? new Date(data.session.completionDeadline).toISOString().split('T')[0] : "");
       } catch (err) {
         setError(err.message);
       } finally {
@@ -82,7 +75,7 @@ export default function MeasurementDetailPage() {
       }
     };
     fetchSession();
-  }, [id, sessionId]);
+  }, [sessionId]);
 
   // Effect to manage which category tables are expanded
   useEffect(() => {
@@ -153,7 +146,7 @@ export default function MeasurementDetailPage() {
     setIsGenerating(true);
     setError(null);
     try {
-      const response = await fetch(`/api/measurements/${sessionId}/pdf`);
+      const response = await fetch(`/api/client/measurements/${sessionId}/pdf`);
       if (!response.ok) {
         throw new Error("Failed to generate PDF preview.");
       }
@@ -223,7 +216,7 @@ export default function MeasurementDetailPage() {
         animate="visible"
         className="max-w-6xl mx-auto"
       >
-        {/* Header and Client Info - Unchanged */}
+        {/* Header and Client Info */}
         <motion.div variants={itemVariants} className="mb-8">
           <div className="glass rounded-2xl p-8 border">
             <div className="flex items-center justify-between mb-4">
@@ -231,13 +224,6 @@ export default function MeasurementDetailPage() {
                 Measurement Session
               </h1>
               <div className="flex space-x-2">
-                <button
-                  onClick={() => router.push(`/pages/clients/${id}/measurements/new?sessionId=${sessionId}`)}
-                  className="p-2 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                  title="Edit Session"
-                >
-                  <Edit3 className="w-5 h-5" />
-                </button>
                 <button
                   onClick={handlePreview}
                   disabled={isGenerating}
@@ -249,7 +235,7 @@ export default function MeasurementDetailPage() {
                 <button
                   onClick={() => router.back()}
                   className="p-2 rounded-full bg-muted/10 text-muted-foreground hover:bg-muted/20 transition-colors"
-                  title="Back to Client"
+                  title="Back"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -288,74 +274,16 @@ export default function MeasurementDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Order Status:</p>
-                  {isEditingStatus ? (
-                    <select
-                      value={currentStatus}
-                      onChange={(e) => setCurrentStatus(e.target.value)}
-                      className="w-full bg-background/70 border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      <option value="ORDER_CONFIRMED">Order Confirmed</option>
-                      <option value="IN_PROGRESS">In Progress</option>
-                      <option value="COMPLETED">Completed</option>
-                      <option value="DELIVERED">Delivered</option>
-                    </select>
-                  ) : (
-                    <p className="text-lg font-bold text-foreground capitalize">
+                  <p className="text-lg font-bold text-foreground capitalize">
                       {currentStatus.replace(/_/g, ' ').toLowerCase()}
-                    </p>
-                  )}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Completion Deadline:</p>
-                  {isEditingStatus ? (
-                    <input
-                      type="date"
-                      value={currentCompletionDeadline}
-                      onChange={(e) => setCurrentCompletionDeadline(e.target.value)}
-                      className="w-full bg-background/70 border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  ) : (
-                    <p className="text-lg font-bold text-foreground">
+                  <p className="text-lg font-bold text-foreground">
                       {session.completionDeadline ? new Date(session.completionDeadline).toLocaleDateString() : 'N/A'}
-                    </p>
-                  )}
+                  </p>
                 </div>
-              </div>
-              <div className="mt-4 flex justify-end">
-                {isEditingStatus ? (
-                  <button
-                    onClick={async () => {
-                      // Save changes
-                      try {
-                        const response = await fetch(`/api/clients/${id}/measurements/${sessionId}`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            status: currentStatus,
-                            completionDeadline: currentCompletionDeadline,
-                          }),
-                        });
-                        if (!response.ok) {
-                          throw new Error('Failed to update order details.');
-                        }
-                        setSession(prev => ({ ...prev, status: currentStatus, completionDeadline: currentCompletionDeadline }));
-                        setIsEditingStatus(false);
-                      } catch (err) {
-                        setError(err.message);
-                      }
-                    }}
-                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90 transition-colors"
-                  >
-                    Save Changes
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setIsEditingStatus(true)}
-                    className="px-4 py-2 bg-muted/20 text-muted-foreground rounded-md text-sm hover:bg-muted/30 transition-colors"
-                  >
-                    Edit Order Details
-                  </button>
-                )}
               </div>
             </div>
 
@@ -441,7 +369,7 @@ export default function MeasurementDetailPage() {
               >
                 <button
                   onClick={() => toggleCategory(categoryKey)}
-                  className="w-full p-4 flex items-center justify-between hover:bg-accent/50 transition-colors"
+                  className="w-full p-4 flex items-.center justify-between hover:bg-accent/50 transition-colors"
                 >
                   <div className="flex items-center space-x-3">
                     <CategoryIcon className="w-5 h-5 text-primary" />
