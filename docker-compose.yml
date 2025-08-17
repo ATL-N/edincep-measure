@@ -78,7 +78,7 @@ services:
   measurematehost:
     image: postgres:15-alpine
     ports:
-      - "5439:5432"
+      - "5440:5432"
     environment:
       - POSTGRES_USER=${DB_USER:-postgres}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
