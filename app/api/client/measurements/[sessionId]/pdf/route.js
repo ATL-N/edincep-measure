@@ -16,10 +16,23 @@ export async function GET(request, { params }) {
   }
 
   try {
+    // Find the client profile associated with the logged-in user
+    const clientProfile = await prisma.client.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+
+    if (!clientProfile) {
+      return NextResponse.json(
+        { error: "Client profile not found for this user." },
+        { status: 404 }
+      );
+    }
+
     const measurement = await prisma.measurement.findFirst({
       where: {
         id: sessionId,
-        clientId: user.clientId,
+        clientId: clientProfile.id, // Ensure the measurement belongs to the user's client profile
       },
       include: {
         client: true,
@@ -27,7 +40,10 @@ export async function GET(request, { params }) {
     });
 
     if (!measurement) {
-      return NextResponse.json({ error: "Measurement not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Measurement not found or you do not have permission to view it." },
+        { status: 404 }
+      );
     }
 
     const doc = new jsPDF();

@@ -20,9 +20,11 @@ const countFilledMeasurements = (measurement) => {
     "createdAt",
     "updatedAt",
     "status",
+    "orderStatus",
     "completionDeadline",
     "materialImageUrl",
     "designImageUrl",
+    "totalMeasurementsCount",
   ];
 
   for (const key in measurement) {
@@ -35,7 +37,10 @@ const countFilledMeasurements = (measurement) => {
 
 // Helper to get IP and OS from request
 const getClientInfo = (request) => {
-  const ipAddress = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || request.ip;
+  const ipAddress =
+    request.headers.get("x-forwarded-for") ||
+    request.headers.get("x-real-ip") ||
+    request.ip;
   const os = request.headers.get("user-agent");
   return { ipAddress, os };
 };
@@ -49,8 +54,10 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Fix: Access params.id directly to avoid Next.js warning
-    const clientId = params.id;
+    // Fix: Await params first, then access id
+    const resolvedParams = await params;
+    const clientId = resolvedParams.id;
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
 
@@ -67,6 +74,7 @@ export async function GET(request, { params }) {
     // Build where clause for searching, including authorization logic
     const where = {
       clientId,
+      status: 'ACTIVE', // <-- Exclude soft-deleted measurements
       // Security: Designers can only see measurements they created. Admins see all.
       ...(user.role === "DESIGNER" && { creatorId: user.id }),
     };
@@ -103,17 +111,40 @@ export async function POST(request, { params }) {
   try {
     // 1. Authenticate user
     const currentUser = await getCurrentUser(request);
-    if (!currentUser || (currentUser.role !== "DESIGNER" && currentUser.role !== "ADMIN") || currentUser.status !== "ACTIVE") {
+    if (
+      !currentUser ||
+      !currentUser.id ||
+      (currentUser.role !== "DESIGNER" && currentUser.role !== "ADMIN") ||
+      currentUser.status !== "ACTIVE"
+    ) {
       return NextResponse.json(
         { error: "Unauthorized to create measurements" },
         { status: 401 }
       );
     }
 
-    // 2. Fix: Access params.id directly
-    const clientId = params.id;
+    // 2. Fix: Await params first, then access id
+    const resolvedParams = await params;
+    const clientId = resolvedParams.id;
 
-    // 3. Authorize: Verify the designer is assigned to this client (Admins can bypass)
+    if (!clientId) {
+      return NextResponse.json(
+        { error: "Client ID is missing" },
+        { status: 400 }
+      );
+    }
+
+    // 3. Verify client exists first
+    const clientExists = await prisma.client.findUnique({
+      where: { id: clientId },
+      select: { id: true },
+    });
+
+    if (!clientExists) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
+
+    // 4. Authorize: Verify the designer is assigned to this client (Admins can bypass)
     if (currentUser.role === "DESIGNER") {
       const isAssigned = await prisma.clientDesigner.findUnique({
         where: {
@@ -128,56 +159,107 @@ export async function POST(request, { params }) {
       }
     }
 
-    // 4. Get the request body
-    const body = await request.json();
+    // 5. Get the request body
+    // const body = await request.json();
 
-    // 5. Separate non-measurement fields from measurement fields which are strings
+    // 6. Get the request body and log it for debugging
+    const body = await request.json();
+    console.log("Request body received:", JSON.stringify(body, null, 2));
+    console.log("Client ID from params:", clientId);
+    console.log("Current User:", currentUser);
+
+    // 7. Validate required IDs first
+    if (!clientId) {
+      console.error("Client ID is missing from params");
+      return NextResponse.json(
+        { error: "Client ID is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!currentUser?.id) {
+      console.error("User ID is missing from currentUser:", currentUser);
+      return NextResponse.json(
+        { error: "User authentication failed" },
+        { status: 401 }
+      );
+    }
+
+    // 8. Separate fields - exclude fields that shouldn't be sent to Prisma
     const {
-      notes,
-      status,
+      notes = "",
+      status, // This could be either RecordStatus or OrderStatus from frontend
+      orderStatus, // This is OrderStatus (ORDER_CONFIRMED/IN_PROGRESS/etc)
       completionDeadline,
-      materialImageUrl,
-      designImageUrl,
+      materialImageUrl = "",
+      designImageUrl = "",
+      // Exclude these fields that shouldn't be in the create data
+      id,
+      createdAt,
+      updatedAt,
+      totalMeasurementsCount,
+      client,
+      creator,
+      // Exclude any measurement history fields
+      measurements,
+      assignedDesigners,
+      assignedClients,
+      clientProfile,
+      logs,
+      accounts,
+      createdMeasurements,
+      user,
       ...measurementStrings
     } = body;
 
-    // 6. CRITICAL FIX: Sanitize the measurement data, converting strings to Floats or null
+    // 9. Sanitize the measurement data
     const sanitizedMeasurements = {};
     for (const key in measurementStrings) {
       if (Object.prototype.hasOwnProperty.call(measurementStrings, key)) {
         const value = measurementStrings[key];
-        // Check if the value is a non-empty string that can be parsed
         if (typeof value === "string" && value.trim() !== "") {
           const num = parseFloat(value);
           sanitizedMeasurements[key] = isNaN(num) ? null : num;
         } else if (typeof value === "number" && !isNaN(value)) {
-          // If it's already a number, keep it
           sanitizedMeasurements[key] = value;
         } else {
-          // For empty strings, null, or undefined, set the value to null
           sanitizedMeasurements[key] = null;
         }
       }
     }
 
-    // 7. Create the new measurement record in the database
+    // 10. Create the measurement data object with proper types
+    // Handle the status field - frontend sends 'status' but we need 'orderStatus'
+    const finalOrderStatus = orderStatus || status || "ORDER_CONFIRMED";
+
+    const measurementData = {
+      clientId: clientId, // Already validated as non-null
+      creatorId: currentUser.id, // Already validated as non-null
+      notes: notes || "",
+      orderStatus: finalOrderStatus, // OrderStatus enum
+      completionDeadline: completionDeadline
+        ? new Date(completionDeadline)
+        : null,
+      materialImageUrl: materialImageUrl || "",
+      designImageUrl: designImageUrl || "",
+      ...sanitizedMeasurements,
+    };
+
+    // 11. Final validation and logging
+    console.log(
+      "Final measurement data:",
+      JSON.stringify(measurementData, null, 2)
+    );
+
+    // 12. Create the new measurement record
     const newMeasurement = await prisma.measurement.create({
-      data: {
-        clientId,
-        creatorId: currentUser.id,
-        notes,
-        status: status || "ORDER_CONFIRMED",
-        completionDeadline: completionDeadline
-          ? new Date(completionDeadline)
-          : null,
-        materialImageUrl,
-        designImageUrl,
-        // Spread the sanitized, correctly-typed measurement data
-        ...sanitizedMeasurements,
-      },
+      data: measurementData,
     });
 
-    // Log the measurement creation event
+    // 13. Calculate totalMeasurementsCount for the response
+    const totalMeasurementsCount2 = countFilledMeasurements(newMeasurement);
+
+    // 14. Log the event
     const { ipAddress, os } = getClientInfo(request);
     await prisma.log.create({
       data: {
@@ -192,11 +274,16 @@ export async function POST(request, { params }) {
       },
     });
 
-    // 8. Return the newly created measurement
-    return NextResponse.json(newMeasurement, { status: 201 });
+    // 15. Return the newly created measurement with count
+    return NextResponse.json(
+      {
+        ...newMeasurement,
+        totalMeasurementsCount2,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Error creating measurement:", error);
-    // Provide more detailed error response in development if needed
     return NextResponse.json(
       { error: "Failed to create measurement", details: error.message },
       { status: 500 }
@@ -209,18 +296,33 @@ export async function PUT(request, { params }) {
   try {
     // 1. Authenticate user
     const currentUser = await getCurrentUser(request);
-    if (!currentUser || (currentUser.role !== "DESIGNER" && currentUser.role !== "ADMIN") || currentUser.status !== "ACTIVE") {
+    if (
+      !currentUser ||
+      !currentUser.id ||
+      (currentUser.role !== "DESIGNER" && currentUser.role !== "ADMIN") ||
+      currentUser.status !== "ACTIVE"
+    ) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 2. Fix: Access params directly
-    const { measurementId } = params;
+    // 2. Fix: Await params first, then access id
+    const resolvedParams = await params;
+    const measurementId = resolvedParams.id;
+
+    if (!measurementId) {
+      return NextResponse.json(
+        { error: "Measurement ID is missing" },
+        { status: 400 }
+      );
+    }
+
     const body = await request.json();
 
-    // 3. Sanitize incoming data just like in the POST request
+    // 3. Sanitize incoming data
     const {
       notes,
       status,
+      orderStatus,
       completionDeadline,
       materialImageUrl,
       designImageUrl,
@@ -229,10 +331,10 @@ export async function PUT(request, { params }) {
 
     const dataToUpdate = {
       notes,
-      status,
+      orderStatus: orderStatus || status,
       completionDeadline: completionDeadline
         ? new Date(completionDeadline)
-        : undefined, // Keep as undefined if null to avoid overwriting
+        : undefined,
       materialImageUrl,
       designImageUrl,
     };
@@ -252,15 +354,14 @@ export async function PUT(request, { params }) {
       }
     }
 
-    // Filter out any fields that are explicitly undefined, so they don't get updated
+    // Filter out undefined fields
     Object.keys(dataToUpdate).forEach(
       (key) => dataToUpdate[key] === undefined && delete dataToUpdate[key]
     );
 
-    // 4. Authorize: Build the where clause to ensure a designer can only update their own work
+    // 4. Authorize: Build the where clause
     const whereClause = {
       id: measurementId,
-      // Security: Admins can update any measurement, designers only their own
       ...(currentUser.role === "DESIGNER" && { creatorId: currentUser.id }),
     };
 
@@ -270,7 +371,7 @@ export async function PUT(request, { params }) {
       data: dataToUpdate,
     });
 
-    // Log the measurement update event
+    // 6. Log the event
     const { ipAddress, os } = getClientInfo(request);
     await prisma.log.create({
       data: {
@@ -287,7 +388,6 @@ export async function PUT(request, { params }) {
 
     return NextResponse.json(updatedMeasurement);
   } catch (error) {
-    // Prisma throws P2025 error if the record to update is not found
     if (error.code === "P2025") {
       return NextResponse.json(
         {

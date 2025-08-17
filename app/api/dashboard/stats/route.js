@@ -1,129 +1,122 @@
 import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/session";
 
 const prisma = new PrismaClient();
 
-// Helper function to calculate percentage change safely
-const calculateChange = (current, previous) => {
-  if (previous === 0) {
-    // If previous month had 0, any new amount is a huge increase.
-    // Can represent as 100% or just show the new number.
-    // Returning 100 for any non-zero current value.
-    return current > 0 ? 100.0 : 0.0;
-  }
-  return parseFloat((((current - previous) / previous) * 100).toFixed(1));
-};
-
-export async function GET() {
+export async function GET(request) {
   try {
-    // --- Date Ranges ---
+    const user = await getCurrentUser(request);
+
+    if (!user || (user.role !== "DESIGNER" && user.role !== "ADMIN")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    let whereClause = {};
+    if (user.role === "DESIGNER") {
+      whereClause = {
+        assignedDesigners: {
+          some: {
+            designerId: user.id,
+          },
+        },
+        status: 'ACTIVE',
+      };
+    } else {
+      whereClause = {
+        status: 'ACTIVE',
+      };
+    }
+
     const now = new Date();
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthEnd = thisMonthStart;
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    sixMonthsAgo.setDate(1);
-    sixMonthsAgo.setHours(0, 0, 0, 0);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    // --- Parallel Data Fetching ---
     const [
       totalClients,
       totalMeasurements,
       thisMonthClients,
-      thisMonthMeasurements,
       lastMonthClients,
+      thisMonthMeasurements,
       lastMonthMeasurements,
-      recentClients,
+      monthlyGrowth,
+      topClients,
       recentMeasurements,
-      monthlyStatsRaw,
-      clientsWithMostMeasurements,
     ] = await Promise.all([
-      prisma.client.count(),
-      prisma.measurement.count(),
-      prisma.client.count({ where: { createdAt: { gte: thisMonthStart } } }),
-      prisma.measurement.count({
-        where: { createdAt: { gte: thisMonthStart } },
-      }),
-      prisma.client.count({
-        where: { createdAt: { gte: lastMonthStart, lt: lastMonthEnd } },
-      }),
-      prisma.measurement.count({
-        where: { createdAt: { gte: lastMonthStart, lt: lastMonthEnd } },
+      prisma.client.count({ where: whereClause }),
+      prisma.measurement.count({ where: { client: whereClause } }),
+      prisma.client.count({ where: { ...whereClause, createdAt: { gte: thisMonthStart } } }),
+      prisma.client.count({ where: { ...whereClause, createdAt: { gte: lastMonthStart, lt: thisMonthStart } } }),
+      prisma.measurement.count({ where: { client: whereClause, createdAt: { gte: thisMonthStart } } }),
+      prisma.measurement.count({ where: { client: whereClause, createdAt: { gte: lastMonthStart, lt: thisMonthStart } } }),
+      prisma.measurement.groupBy({
+        by: ['createdAt'],
+        _count: { id: true },
+        where: { client: whereClause },
+        orderBy: { createdAt: 'asc' },
       }),
       prisma.client.findMany({
-        orderBy: { createdAt: "desc" },
+        where: whereClause,
+        include: {
+          _count: {
+            select: { measurements: true },
+          },
+        },
+        orderBy: {
+          measurements: {
+            _count: 'desc',
+          },
+        },
         take: 5,
-        include: { _count: { select: { measurements: true } } },
       }),
       prisma.measurement.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 5,
-        include: { client: { select: { id: true, name: true } } },
-      }),
-      prisma.measurement.groupBy({
-        by: ["createdAt"],
-        where: { createdAt: { gte: sixMonthsAgo } },
-        _count: { id: true },
-        orderBy: { createdAt: "asc" },
-      }),
-      prisma.client.findMany({
-        include: { _count: { select: { measurements: true } } },
-        orderBy: { measurements: { _count: "desc" } },
+        where: { client: whereClause },
+        include: {
+          client: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
         take: 5,
       }),
     ]);
 
-    // Process raw monthly stats into a formatted structure
-    const monthlyStatsMap = new Map();
-    monthlyStatsRaw.forEach((item) => {
-      const month = new Date(item.createdAt).toLocaleString("default", {
-        month: "short",
-        year: "2-digit",
-      });
-      if (!monthlyStatsMap.has(month)) {
-        monthlyStatsMap.set(month, { month, count: 0 });
-      }
-      monthlyStatsMap.get(month).count += item._count.id;
-    });
+    const calculateChange = (current, previous) => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return ((current - previous) / previous) * 100;
+    };
 
-    const monthlyStats = Array.from(monthlyStatsMap.values());
+    const summaryStats = {
+      totalClients: { value: totalClients },
+      totalMeasurements: { value: totalMeasurements },
+      thisMonthClients: {
+        value: thisMonthClients,
+        change: calculateChange(thisMonthClients, lastMonthClients),
+      },
+      thisMonthMeasurements: {
+        value: thisMonthMeasurements,
+        change: calculateChange(thisMonthMeasurements, lastMonthMeasurements),
+      },
+    };
 
-    // --- Calculations ---
-    const clientChange = calculateChange(thisMonthClients, lastMonthClients);
-    const measurementChange = calculateChange(
-      thisMonthMeasurements,
-      lastMonthMeasurements
-    );
+    const formattedTopClients = topClients.map(c => ({
+      id: c.id,
+      name: c.name,
+      measurementCount: c._count.measurements,
+    }));
 
     return NextResponse.json({
-      summaryStats: {
-        totalClients: { value: totalClients },
-        totalMeasurements: { value: totalMeasurements },
-        thisMonthClients: { value: thisMonthClients, change: clientChange },
-        thisMonthMeasurements: {
-          value: thisMonthMeasurements,
-          change: measurementChange,
-        },
-      },
-      recentClients: recentClients.map((c) => ({
-        id: c.id,
-        name: c.name,
-        createdAt: c.createdAt,
-        measurementCount: c._count.measurements,
-      })),
+      summaryStats,
+      monthlyGrowth: monthlyGrowth.map(m => ({ month: new Date(m.createdAt).toLocaleString('default', { month: 'short' }), count: m._count.id })),
+      topClients: formattedTopClients,
       recentMeasurements,
-      monthlyGrowth: monthlyStats,
-      topClients: clientsWithMostMeasurements.map((client) => ({
-        id: client.id,
-        name: client.name,
-        measurementCount: client._count.measurements,
-      })),
     });
+
   } catch (error) {
-    console.error("Error fetching dashboard stats:", error);
+    console.error("Dashboard stats error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch dashboard statistics" },
+      { error: "Failed to fetch dashboard stats" },
       { status: 500 }
     );
   }

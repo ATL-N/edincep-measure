@@ -15,8 +15,9 @@ export async function GET(request) {
 
   try {
     const clientProfile = await prisma.client.findUnique({
-      where: { id: user.clientId },
+      where: { userId: user.id }, // Correctly find the client profile by the user's ID
     });
+
     if (!clientProfile) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
@@ -42,7 +43,7 @@ export async function PUT(request) {
     const { name, phone, address } = body;
 
     const updatedProfile = await prisma.client.update({
-      where: { id: user.clientId },
+      where: { userId: user.id }, // Correctly update the client profile by the user's ID
       data: { name, phone, address },
     });
 

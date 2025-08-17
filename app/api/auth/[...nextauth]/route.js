@@ -114,13 +114,13 @@ export const authOptions = {
         session.user.id = token.id;
         session.user.role = token.role;
         session.user.status = token.status;
-        session.user.clientId = token.clientId; // <-- Add clientId to session
+        session.user.clientId = token.clientId;
+        session.user.measurementUnit = token.measurementUnit; // <-- Add to session
       }
       return session;
     },
     async jwt({ token, user }) {
       if (user) {
-        // On sign-in, fetch the client profile if the user is a CLIENT
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
           include: { clientProfile: true },
@@ -128,7 +128,7 @@ export const authOptions = {
         token.id = dbUser.id;
         token.role = dbUser.role;
         token.status = dbUser.status;
-        // If a client profile exists, add its ID to the token
+        token.measurementUnit = dbUser.measurementUnit; // <-- Add to token
         if (dbUser.clientProfile) {
           token.clientId = dbUser.clientProfile.id;
         }

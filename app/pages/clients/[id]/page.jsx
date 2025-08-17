@@ -13,6 +13,7 @@ import {
   History,
   Edit3,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
 
 // Skeleton Component for a better loading experience
@@ -61,6 +62,29 @@ export default function ClientProfilePage() {
   const [client, setClient] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const handleDelete = async () => {
+    if (window.confirm("Are you sure you want to delete this client? This action cannot be undone.")) {
+      setError(null);
+      try {
+        const response = await fetch(`/api/clients/${id}`, {
+          method: 'DELETE',
+        });
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || "Failed to delete client.");
+        }
+        // On successful deletion, redirect back to the clients list
+        router.push('/pages/clients');
+      } catch (err) {
+        setError(err.message);
+      }
+    }
+  };
+
+  const handleEdit = () => {
+    router.push(`/pages/clients/${id}/edit`);
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -184,9 +208,18 @@ export default function ClientProfilePage() {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
+                  onClick={handleEdit}
                   className="border border-border px-4 py-3 rounded-xl hover:bg-accent transition-colors"
                 >
                   <Edit3 className="w-5 h-5" />
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleDelete}
+                  className="border border-destructive/50 text-destructive px-4 py-3 rounded-xl hover:bg-destructive/10 transition-colors"
+                >
+                  <Trash2 className="w-5 h-5" />
                 </motion.button>
               </div>
             </div>

@@ -48,103 +48,72 @@ export async function GET(request, { params }) {
   }
 }
 
-// PUT update measurement
+// PUT update measurement (FIXED & SECURED)
 export async function PUT(request, { params }) {
   try {
+    // 1. Authenticate user
     const currentUser = await getCurrentUser(request);
-
     if (!currentUser || (currentUser.role !== "DESIGNER" && currentUser.role !== "ADMIN") || currentUser.status !== "ACTIVE") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // 2. Get ID and body
     const { id } = params;
     const body = await request.json();
 
+    // 3. Sanitize incoming data
     const {
-      shoulderToChest,
-      shoulderToBust,
-      shoulderToUnderbust,
-      shoulderToWaistFront,
-      shoulderToWaistBack,
-      waistToHip,
-      shoulderToKnee,
-      shoulderToDressLength,
-      shoulderToAnkle,
-      shoulderWidth,
-      nippleToNipple,
-      offShoulder,
-      bust,
-      underBust,
-      waist,
-      hip,
-      thigh,
-      knee,
-      ankle,
-      neck,
-      shirtSleeve,
-      elbowLength,
-      longSleeves,
-      aroundArm,
-      elbow,
-      wrist,
-      inSeam,
-      outSeam,
-      measurementType,
       notes,
+      orderStatus,
+      completionDeadline,
+      materialImageUrl,
+      designImageUrl,
+      ...measurementStrings
     } = body;
 
-    const measurement = await prisma.measurement.update({
-      where: { id },
-      data: {
-        shoulderToChest: shoulderToChest ? parseFloat(shoulderToChest) : null,
-        shoulderToBust: shoulderToBust ? parseFloat(shoulderToBust) : null,
-        shoulderToUnderbust: shoulderToUnderbust
-          ? parseFloat(shoulderToUnderbust)
-          : null,
-        shoulderToWaistFront: shoulderToWaistFront
-          ? parseFloat(shoulderToWaistFront)
-          : null,
-        shoulderToWaistBack: shoulderToWaistBack
-          ? parseFloat(shoulderToWaistBack)
-          : null,
-        waistToHip: waistToHip ? parseFloat(waistToHip) : null,
-        shoulderToKnee: shoulderToKnee ? parseFloat(shoulderToKnee) : null,
-        shoulderToDressLength: shoulderToDressLength
-          ? parseFloat(shoulderToDressLength)
-          : null,
-        shoulderToAnkle: shoulderToAnkle ? parseFloat(shoulderToAnkle) : null,
-        shoulderWidth: shoulderWidth ? parseFloat(shoulderWidth) : null,
-        nippleToNipple: nippleToNipple ? parseFloat(nippleToNipple) : null,
-        offShoulder: offShoulder ? parseFloat(offShoulder) : null,
-        bust: bust ? parseFloat(bust) : null,
-        underBust: underBust ? parseFloat(underBust) : null,
-        waist: waist ? parseFloat(waist) : null,
-        hip: hip ? parseFloat(hip) : null,
-        thigh: thigh ? parseFloat(thigh) : null,
-        knee: knee ? parseFloat(knee) : null,
-        ankle: ankle ? parseFloat(ankle) : null,
-        neck: neck ? parseFloat(neck) : null,
-        shirtSleeve: shirtSleeve ? parseFloat(shirtSleeve) : null,
-        elbowLength: elbowLength ? parseFloat(elbowLength) : null,
-        longSleeves: longSleeves ? parseFloat(longSleeves) : null,
-        aroundArm: aroundArm ? parseFloat(aroundArm) : null,
-        elbow: elbow ? parseFloat(elbow) : null,
-        wrist: wrist ? parseFloat(wrist) : null,
-        inSeam: inSeam ? parseFloat(inSeam) : null,
-        outSeam: outSeam ? parseFloat(outSeam) : null,
-        measurementType: measurementType || "snug",
-        notes,
-      },
-      include: {
-        client: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
+    const dataToUpdate = {
+      notes,
+      orderStatus,
+      completionDeadline: completionDeadline
+        ? new Date(completionDeadline)
+        : undefined,
+      materialImageUrl,
+      designImageUrl,
+    };
+
+    // Sanitize numeric measurement fields
+    for (const key in measurementStrings) {
+      if (Object.prototype.hasOwnProperty.call(measurementStrings, key)) {
+        const value = measurementStrings[key];
+        if (typeof value === "string" && value.trim() !== "") {
+          const num = parseFloat(value);
+          dataToUpdate[key] = isNaN(num) ? null : num;
+        } else if (typeof value === "number" && !isNaN(value)) {
+          dataToUpdate[key] = value;
+        } else {
+          dataToUpdate[key] = null;
+        }
+      }
+    }
+
+    // Filter out any fields that are explicitly undefined
+    Object.keys(dataToUpdate).forEach(
+      (key) => dataToUpdate[key] === undefined && delete dataToUpdate[key]
+    );
+
+    // 4. Authorize: Ensure a designer can only update their own work
+    const whereClause = {
+      id,
+      ...(currentUser.role === "DESIGNER" && { creatorId: currentUser.id }),
+    };
+
+    // 5. Update the measurement
+    const updatedMeasurement = await prisma.measurement.update({
+      where: whereClause,
+      data: dataToUpdate,
     });
 
+    // 6. Log the event
     const { ipAddress, os } = getClientInfo(request);
     await prisma.log.create({
       data: {
@@ -153,17 +122,17 @@ export async function PUT(request, { params }) {
         ipAddress,
         os,
         details: {
-          measurementId: measurement.id,
-          clientId: measurement.clientId,
+          measurementId: updatedMeasurement.id,
+          clientId: updatedMeasurement.clientId,
         },
       },
     });
 
-    return NextResponse.json(measurement);
+    return NextResponse.json(updatedMeasurement);
   } catch (error) {
     if (error.code === "P2025") {
       return NextResponse.json(
-        { error: "Measurement not found" },
+        { error: "Measurement not found or you don't have permission to edit it." },
         { status: 404 }
       );
     }

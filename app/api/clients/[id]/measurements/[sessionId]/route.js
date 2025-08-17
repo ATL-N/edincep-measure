@@ -1,8 +1,17 @@
 // app/api/clients/[id]/measurements/[sessionId]/route.js
 import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/session";
 
 const prisma = new PrismaClient();
+
+// Helper to get IP and OS from request
+const getClientInfo = (request) => {
+  const ipAddress = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || request.ip;
+  const os = request.headers.get("user-agent");
+  return { ipAddress, os };
+};
+
 
 // A mapping to define categories and display names for each measurement field.
 const measurementDefinitions = {
@@ -191,15 +200,22 @@ function transformMeasurementData(measurement) {
 // GET single measurement session
 export async function GET(request, { params }) {
   try {
+    const { searchParams } = new URL(request.url);
+    const format = searchParams.get("format");
+
     const { id: clientId, sessionId } = await params;
 
-    const session = await prisma.measurement.findUnique({
-      where: { id: sessionId, clientId: clientId }, // Ensure session belongs to the client
+    const session = await prisma.measurement.findFirst({
+      where: {
+        id: sessionId,
+        clientId: clientId,
+        status: "ACTIVE",
+      },
       include: {
         client: {
           select: {
             name: true,
-            phone: true, // Explicitly select phone
+            phone: true,
             email: true,
           },
         },
@@ -213,7 +229,21 @@ export async function GET(request, { params }) {
       );
     }
 
+    // --- LOGGING ADDED ---
+    console.log("RAW SESSION DATA FROM DB:", session);
+
     const { client, ...sessionData } = session;
+
+    // If format=raw is requested, return the flat data for the edit page
+    if (format === "raw") {
+      console.log("RETURNING RAW DATA FOR EDIT FORM");
+      return NextResponse.json({
+        client: { name: client.name },
+        session: sessionData,
+      });
+    }
+
+    // Otherwise, return the transformed data for the details page
     const transformedMeasurements = transformMeasurementData(sessionData);
 
     const responsePayload = {
@@ -230,6 +260,7 @@ export async function GET(request, { params }) {
       },
     };
 
+    console.log("RETURNING TRANSFORMED DATA FOR DETAILS PAGE:", responsePayload);
     return NextResponse.json(responsePayload);
   } catch (error) {
     console.error("Error fetching measurement session:", error);
@@ -240,25 +271,56 @@ export async function GET(request, { params }) {
   }
 }
 
-// DELETE single measurement session
+// DELETE single measurement session (Soft Delete)
 export async function DELETE(request, { params }) {
   try {
+    // 1. Authenticate and authorize the user
+    const currentUser = await getCurrentUser(request);
+    if (!currentUser || (currentUser.role !== "DESIGNER" && currentUser.role !== "ADMIN") || currentUser.status !== "ACTIVE") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id: clientId, sessionId } = params;
 
-    // First, verify the session exists and belongs to the client before deleting
-    const session = await prisma.measurement.findUnique({
-      where: { id: sessionId, clientId: clientId },
+    // 2. Build the where clause for authorization
+    const whereClause = {
+      id: sessionId,
+      clientId: clientId,
+      // Designers can only delete measurements they created
+      ...(currentUser.role === "DESIGNER" && { creatorId: currentUser.id }),
+    };
+
+    // 3. Verify the session exists and the user has permission
+    const session = await prisma.measurement.findFirst({
+      where: whereClause,
     });
 
     if (!session) {
       return NextResponse.json(
-        { error: "Measurement session not found" },
+        { error: "Measurement session not found or you do not have permission to delete it." },
         { status: 404 }
       );
     }
 
-    await prisma.measurement.delete({
+    // 4. Perform the soft delete by updating the status
+    await prisma.measurement.update({
       where: { id: sessionId },
+      data: { status: "DELETED" },
+    });
+
+    // 5. Log the event
+    const { ipAddress, os } = getClientInfo(request);
+    await prisma.log.create({
+      data: {
+        userId: currentUser.id,
+        action: "MEASUREMENT_DELETE",
+        ipAddress,
+        os,
+        details: {
+          measurementId: sessionId,
+          clientId: clientId,
+        },
+      },
     });
 
     return NextResponse.json({ message: "Session deleted successfully" });
@@ -271,4 +333,93 @@ export async function DELETE(request, { params }) {
   }
 }
 
-// We can add PUT later for editing a session
+// PUT - Update a measurement session
+export async function PUT(request, { params }) {
+  try {
+    // 1. Authenticate and authorize the user
+    const currentUser = await getCurrentUser(request);
+    if (!currentUser || (currentUser.role !== "DESIGNER" && currentUser.role !== "ADMIN") || currentUser.status !== "ACTIVE") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id: clientId, sessionId } = await params;
+    const body = await request.json();
+
+    // 2. Build the where clause for authorization
+    const whereClause = {
+      id: sessionId,
+      clientId: clientId,
+      // Designers can only edit measurements they created
+      ...(currentUser.role === "DESIGNER" && { creatorId: currentUser.id }),
+    };
+
+    // 3. Verify the session exists and the user has permission
+    const session = await prisma.measurement.findFirst({
+      where: whereClause,
+    });
+
+    if (!session) {
+      return NextResponse.json(
+        { error: "Measurement session not found or you do not have permission to edit it." },
+        { status: 404 }
+      );
+    }
+
+    // 4. Prepare the data for update
+    const { notes, status, completionDeadline, materialImageUrl, designImageUrl, ...measurements } = body;
+
+    // Convert numeric measurement values from string to float
+    const measurementData = {};
+    for (const key in measurements) {
+      // Skip read-only fields that might be in the body
+      if (key === 'id' || key === 'clientId' || key === 'createdAt' || key === 'updatedAt' || key === 'creatorId') {
+        continue;
+      }
+      if (measurements[key] !== null && measurements[key] !== "") {
+        const parsedValue = parseFloat(measurements[key]);
+        if (!isNaN(parsedValue)) {
+          measurementData[key] = parsedValue;
+        }
+      }
+    }
+
+    const updateData = {
+      notes,
+      status,
+      completionDeadline: completionDeadline ? new Date(completionDeadline) : null,
+      materialImageUrl,
+      designImageUrl,
+      ...measurementData,
+    };
+
+    // 5. Perform the update
+    const updatedSession = await prisma.measurement.update({
+      where: { id: sessionId },
+      data: updateData,
+    });
+
+    // 6. Log the event
+    const { ipAddress, os } = getClientInfo(request);
+    await prisma.log.create({
+      data: {
+        userId: currentUser.id,
+        action: "MEASUREMENT_UPDATE",
+        ipAddress,
+        os,
+        details: {
+          measurementId: sessionId,
+          clientId: clientId,
+          updatedFields: Object.keys(body),
+        },
+      },
+    });
+
+    return NextResponse.json(updatedSession);
+  } catch (error) {
+    console.error("Error updating session:", error);
+    return NextResponse.json(
+      { error: "Failed to update session" },
+      { status: 500 }
+    );
+  }
+}

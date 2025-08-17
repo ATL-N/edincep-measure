@@ -5,9 +5,16 @@ const bcrypt = require("bcrypt");
 const prisma = new PrismaClient();
 
 async function main() {
+  console.log("🌱 Deleting existing data...");
+  // Delete in reverse order of creation to avoid foreign key constraints
+  await prisma.measurement.deleteMany({});
+  await prisma.clientDesigner.deleteMany({});
+  await prisma.client.deleteMany({});
+  await prisma.user.deleteMany({});
+
   console.log("🌱 Seeding database...");
 
-  // Create a designer user
+  // Create a designer user and an admin user
   const designer = await prisma.user.create({
     data: {
       name: "Pat Pat",
@@ -15,6 +22,9 @@ async function main() {
       role: "DESIGNER",
       hashedPassword: await bcrypt.hash("password", 10),
     },
+  });
+
+  const admin = await prisma.user.create({
     data: {
       name: "admin admin",
       email: "admin@admin.com",

@@ -14,8 +14,22 @@ export async function GET(request) {
   }
 
   try {
+    // Find the client profile associated with the logged-in user
+    const clientProfile = await prisma.client.findUnique({
+      where: { userId: user.id },
+      select: { id: true }, // We only need the ID for the next query
+    });
+
+    // If no client profile is found for this user, return an error
+    if (!clientProfile) {
+      return NextResponse.json(
+        { error: "Client profile not found for this user." },
+        { status: 404 }
+      );
+    }
+
     const measurements = await prisma.measurement.findMany({
-      where: { clientId: user.clientId },
+      where: { clientId: clientProfile.id },
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(measurements);

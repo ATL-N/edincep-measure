@@ -42,6 +42,7 @@ export async function GET(request, { params }) {
       where: { id },
       include: {
         measurements: {
+          where: { status: 'ACTIVE' }, // <-- Exclude soft-deleted measurements
           orderBy: { createdAt: "desc" },
         },
       },
@@ -152,8 +153,10 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
-    await prisma.client.delete({
-      where: { id },
+    // 2. Update the client's status to DELETED
+    await prisma.client.update({
+      where: { id: params.id },
+      data: { status: 'DELETED' },
     });
 
     const { ipAddress, os } = getClientInfo(request);

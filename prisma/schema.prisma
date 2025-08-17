@@ -26,6 +26,12 @@ enum UserStatus {
   DELETED
 }
 
+// --- NEW: Add an enum for measurement units ---
+enum MeasurementUnit {
+  INCH
+  CENTIMETER
+}
+
 // The core User model for anyone who logs into the system.
 model User {
   id             String    @id @default(cuid())
@@ -36,6 +42,7 @@ model User {
   role           Role      @default(CLIENT)
   status         UserStatus @default(ACTIVE)
   hashedPassword String?
+  measurementUnit MeasurementUnit @default(INCH) // --- NEW: Add user preference ---
 
   // --- Auth.js relations ---
   accounts Account[]
@@ -108,9 +115,9 @@ model Log {
 // --- APPLICATION MODELS ---
 // ------------------------------------
 
-enum ClientStatus {
-  Active
-  Inactive
+enum RecordStatus {
+  ACTIVE
+  DELETED
 }
 
 // --- NEW: JOIN TABLE for Many-to-Many Relationship ---
@@ -136,7 +143,7 @@ model Client {
   address     String?
   dateOfBirth DateTime?
   notes       String?
-  status      ClientStatus @default(Active)
+  status      RecordStatus @default(ACTIVE)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -176,7 +183,8 @@ model Measurement {
   creator   User     @relation(fields: [creatorId], references: [id], onDelete: Restrict)
 
   // Order details
-  status             OrderStatus @default(ORDER_CONFIRMED)
+  orderStatus        OrderStatus  @default(ORDER_CONFIRMED)
+  status             RecordStatus @default(ACTIVE)
   completionDeadline DateTime?
   materialImageUrl   String?
   designImageUrl     String?

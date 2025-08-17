@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   Save,
@@ -92,19 +92,15 @@ const FormSkeleton = () => (
   </div>
 );
 
-export default function MeasurementFormPage() {
-  const { id: clientId } = useParams();
+export default function MeasurementEditPage() {
+  const { id: clientId, sessionId } = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const sessionId = searchParams.get("sessionId");
-  const isEditMode = !!sessionId;
   const { data: session } = useSession();
 
   // State for data
   const [clientName, setClientName] = useState("");
   const [measurements, setMeasurements] = useState({});
   const [notes, setNotes] = useState("");
-  const [lastMeasurements, setLastMeasurements] = useState({});
   const [orderStatus, setOrderStatus] = useState("ORDER_CONFIRMED");
   const [completionDeadline, setCompletionDeadline] = useState("");
   const [materialFile, setMaterialFile] = useState(null);
@@ -143,50 +139,43 @@ export default function MeasurementFormPage() {
     return isNaN(parsedValue) ? null : parsedValue;
   };
 
- useEffect(() => {
+  useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        if (isEditMode) {
-          const [clientRes, sessionRes] = await Promise.all([
-            fetch(`/api/clients/${clientId}`),
-            fetch(`/api/clients/${clientId}/measurements/${sessionId}?format=raw`),
-          ]);
-          if (!clientRes.ok) throw new Error("Failed to load client details.");
-          if (!sessionRes.ok) throw new Error("Failed to load session data.");
-          const clientData = await clientRes.json();
-          const { session: rawSessionData } = await sessionRes.json();
+        const [clientRes, sessionRes] = await Promise.all([
+          fetch(`/api/clients/${clientId}`),
+          fetch(`/api/clients/${clientId}/measurements/${sessionId}?format=raw`),
+        ]);
 
-          const displayMeasurements = {};
-          for (const key in rawSessionData) {
-            if (key.includes('Snug') || key.includes('Static') || key.includes('Dynamic')) {
-              displayMeasurements[key] = convertToDisplay(rawSessionData[key]);
-            }
-          }
-          setMeasurements(displayMeasurements);
-          setNotes(rawSessionData.notes || "");
-          setOrderStatus(rawSessionData.status || "ORDER_CONFIRMED");
-          // ... (rest of the state setting)
-        } else {
-          const res = await fetch(`/api/clients/${clientId}`);
-          if (!res.ok) throw new Error("Failed to load client details.");
-          const clientData = await res.json();
-          setClientName(clientData.name);
-          if (clientData.measurements && clientData.measurements.length > 0) {
-            setLastMeasurements(clientData.measurements[0]);
-          }
-        }
+        if (!clientRes.ok) throw new Error("Failed to load client details.");
+        if (!sessionRes.ok) throw new Error("Failed to load session data.");
+
+        const clientData = await clientRes.json();
+        const { session } = await sessionRes.json();
+
+        setClientName(clientData.name);
+        setMeasurements(session || {});
+        setNotes(session.notes || "");
+        setOrderStatus(session.status || "ORDER_CONFIRMED");
+        setCompletionDeadline(
+          session.completionDeadline
+            ? new Date(session.completionDeadline)
+                .toISOString()
+                .split("T")[0]
+            : ""
+        );
+        setMaterialImageUrl(session.materialImageUrl || "");
+        setDesignImageUrl(session.designImageUrl || "");
       } catch (err) {
         setError(err.message);
       } finally {
         setIsLoading(false);
       }
     };
-    if (session) {
-      fetchData();
-    }
-  }, [clientId, sessionId, isEditMode, session]);
+    fetchData();
+  }, [clientId, sessionId]);
 
   const handleMeasurementChange = (fieldName, type, value) => {
     const key = `${fieldName}${type.charAt(0).toUpperCase() + type.slice(1)}`;
@@ -201,29 +190,50 @@ export default function MeasurementFormPage() {
     setIsSaving(true);
     setError(null);
 
-    // ... (image upload logic is the same)
+    let finalMaterialImageUrl = materialImageUrl;
+    let finalDesignImageUrl = designImageUrl;
 
     try {
-      const url = isEditMode
-        ? `/api/clients/${clientId}/measurements/${sessionId}`
-        : `/api/clients/${clientId}/measurements`;
-      const method = isEditMode ? "PUT" : "POST";
-
-      const storageMeasurements = {};
-      const sourceData = isEditMode ? measurements : { ...lastMeasurements, ...measurements };
-
-      for (const key in sourceData) {
-        if (key.includes('Snug') || key.includes('Static') || key.includes('Dynamic')) {
-          storageMeasurements[key] = convertToStorage(sourceData[key]);
+      if (materialFile) {
+        const formData = new FormData();
+        formData.append("file", materialFile);
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        if (!uploadRes.ok) {
+          const errData = await uploadRes.json();
+          throw new Error(errData.error || "Failed to upload material image.");
         }
+        const uploadResult = await uploadRes.json();
+        finalMaterialImageUrl = uploadResult.path;
       }
+
+      if (designFile) {
+        const formData = new FormData();
+        formData.append("file", designFile);
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        if (!uploadRes.ok) {
+          const errData = await uploadRes.json();
+          throw new Error(errData.error || "Failed to upload design image.");
+        }
+        const uploadResult = await uploadRes.json();
+        finalDesignImageUrl = uploadResult.path;
+      }
+
+      const url = `/api/clients/${clientId}/measurements/${sessionId}`;
+      const method = "PUT";
 
       const body = {
         notes,
-        ...storageMeasurements,
+        ...measurements,
         status: orderStatus,
         completionDeadline,
-        // ... (image URLs)
+        materialImageUrl: finalMaterialImageUrl,
+        designImageUrl: finalDesignImageUrl,
       };
 
       const response = await fetch(url, {
@@ -235,7 +245,7 @@ export default function MeasurementFormPage() {
         const errData = await response.json();
         throw new Error(errData.error || "Failed to save measurements.");
       }
-      router.push(`/pages/clients/${clientId}`);
+      router.push(`/pages/clients/${clientId}/measurements/${sessionId}`);
       router.refresh();
     } catch (err) {
       setError(err.message);
@@ -263,7 +273,7 @@ export default function MeasurementFormPage() {
           </button>
           <div className="glass rounded-2xl p-8 border">
             <h1 className="text-3xl font-bold gradient-text mb-2">
-              {isEditMode ? "Edit Measurements" : "New Measurement Session"}
+              Edit Measurement Session
             </h1>
             <p className="text-muted-foreground">
               For client:{" "}
@@ -288,7 +298,6 @@ export default function MeasurementFormPage() {
           </div>
         </motion.div>
 
-        {/* New Order Details Section */}
         <motion.div className="mb-8">
           <div className="glass rounded-xl p-6 border">
             <h2 className="text-xl font-bold mb-4 gradient-text">
@@ -477,9 +486,6 @@ export default function MeasurementFormPage() {
                                         value={
                                           measurements[fullFieldName] || ""
                                         }
-                                        placeholder={
-                                          convertToDisplay(lastMeasurements[fullFieldName]) || "0.0"
-                                        }
                                         onChange={(e) =>
                                           handleMeasurementChange(
                                             fieldName,
@@ -487,7 +493,7 @@ export default function MeasurementFormPage() {
                                             e.target.value
                                           )
                                         }
-                                        className="w-full max-w-[80px] mx-auto bg-background/50 border border-border/50 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/40"
+                                        className="w-full max-w-[80px] mx-auto bg-background/50 border border-border/50 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary"
                                       />
                                     </td>
                                   );
@@ -527,9 +533,7 @@ export default function MeasurementFormPage() {
             <span>
               {isSaving
                 ? "Saving..."
-                : isEditMode
-                ? "Update Session"
-                : "Save Session"}
+                : "Update Session"}
             </span>
           </motion.button>
         </div>

@@ -1,12 +1,12 @@
 # version: '3.8'
 services:
   nextjs:
-    image: edincep-measure-nextjs:${VERSION:-latest}
+    image: measure-mate-nextjs:${VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "${APP_PORT:-3007}:3000"
+      - "${APP_PORT:-3008}:3000"
     env_file:
      - .env
     environment:
@@ -14,18 +14,18 @@ services:
       - NEXTAUTH_URL=https://${DOMAIN}
       - NODE_ENV=production
       - DB_HOST=${DB_HOST}
-      - PORT=3007
+      - PORT=3008
     labels:
       - traefik.enable=true
-      - traefik.http.routers.edincep-measure-http.rule=Host(`${DOMAIN}`)
-      - traefik.http.routers.edincep-measure-http.entrypoints=http
-      - traefik.http.routers.edincep-measure-http.middlewares=https-redirect
-      - traefik.http.routers.edincep-measure-https.rule=Host(`${DOMAIN}`)
-      - traefik.http.routers.edincep-measure-https.entrypoints=https
-      - traefik.http.routers.edincep-measure-https.tls=true
-      - traefik.http.routers.edincep-measure-https.tls.certresolver=le
-      - traefik.http.routers.edincep-measure-https.service=edincep-measure-service
-      - traefik.http.services.edincep-measure-service.loadbalancer.server.port=3007
+      - traefik.http.routers.measure-mate-http.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.measure-mate-http.entrypoints=http
+      - traefik.http.routers.measure-mate-http.middlewares=https-redirect
+      - traefik.http.routers.measure-mate-https.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.measure-mate-https.entrypoints=https
+      - traefik.http.routers.measure-mate-https.tls=true
+      - traefik.http.routers.measure-mate-https.tls.certresolver=le
+      - traefik.http.routers.measure-mate-https.service=measure-mate-service
+      - traefik.http.services.measure-mate-service.loadbalancer.server.port=3008
     depends_on:
       edincepmeasurehost:
         condition: service_healthy
@@ -35,7 +35,7 @@ services:
     networks:
       - traefik-public
     healthcheck:
-      test: ["CMD", "wget", "--spider", "http://localhost:3007/api/health"]
+      test: ["CMD", "wget", "--spider", "http://localhost:3008/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -43,7 +43,7 @@ services:
 
   # Prisma migration and seeding service
   prisma-migrate:
-    image: edincep-measure-nextjs:${VERSION:-latest}
+    image: measure-mate-nextjs:${VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -78,14 +78,14 @@ services:
   edincepmeasurehost:
     image: postgres:15-alpine
     ports:
-      - "5438:5432"
+      - "5439:5432"
     environment:
       - POSTGRES_USER=${DB_USER:-postgres}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME:-postgres}
       - DB_HOST=${DB_HOST}
     volumes:
-      - postgres-data-edincep-measure:/var/lib/postgresql/data
+      - postgres-data-measure-mate:/var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d
       - ./backups:/app/backups
     healthcheck:
@@ -101,7 +101,7 @@ services:
       - "ssl=off"
 
 volumes:
-  postgres-data-edincep-measure:
+  postgres-data-measure-mate:
     driver: local
 
 networks:

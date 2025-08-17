@@ -1,6 +1,6 @@
-// app/api/clients/route.js
+// /api/clients/route.js
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, RecordStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 
@@ -36,7 +36,9 @@ export async function GET(request) {
     const offset = (page - 1) * limit;
 
     // 4. Build the 'where' clause based on user role
-    const where = {};
+    const where = {
+      status: RecordStatus.ACTIVE // <-- Default to only fetching ACTIVE clients
+    };
 
     if (user.role === "DESIGNER") {
       where.assignedDesigners = {
@@ -58,9 +60,16 @@ export async function GET(request) {
       ];
     }
 
-    // Add status filter if provided
-    if (status && status !== "All") {
-      where.status = status;
+    // Add status filter if provided, using the enum
+    if (user.role === 'ADMIN' && status) {
+      if (status === RecordStatus.ACTIVE || status === RecordStatus.DELETED) {
+        where.status = status;
+      } else if (status === 'All') {
+        delete where.status;
+      }
+    } else if (status === RecordStatus.DELETED) {
+       // Prevent non-admins from querying for deleted clients
+       where.status = RecordStatus.ACTIVE;
     }
 
     // 5. Build the 'orderBy' clause
@@ -213,7 +222,7 @@ export async function POST(request) {
           address,
           dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
           notes,
-          status: status || "Active",
+          status: status || "ACTIVE",
           user: {
             connect: { id: clientUser.id },
           },

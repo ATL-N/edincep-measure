@@ -1,10 +1,30 @@
 import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/session";
 
 const prisma = new PrismaClient();
 
-export async function GET() {
+export async function GET(request) {
   try {
+    const user = await getCurrentUser(request);
+
+    // If no user, or user is not a designer/admin, deny access.
+    if (!user || (user.role !== "DESIGNER" && user.role !== "ADMIN")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // --- Create a base 'where' clause for authorization ---
+    let whereClause = {};
+    if (user.role === "DESIGNER") {
+      whereClause = {
+        assignedDesigners: {
+          some: {
+            designerId: user.id,
+          },
+        },
+      };
+    }
+    
     // --- Date Calculations ---
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
@@ -12,7 +32,7 @@ export async function GET() {
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-    // --- Parallel Data Fetching ---
+    // --- Parallel Data Fetching (Scoped to the user) ---
     const [
       totalClients,
       newClientsThisMonth,
@@ -22,41 +42,34 @@ export async function GET() {
       measurementsThisWeek,
       newClientsThisWeek,
     ] = await Promise.all([
-      // Stat: Total Clients
-      prisma.client.count(),
-      // Stat: New Clients This Month
-      prisma.client.count({ where: { createdAt: { gte: oneMonthAgo } } }),
-      // Stat: Total Measurements
-      prisma.measurement.count(),
-      // Stat: Active Projects/Clients
-      prisma.client.count({ where: { status: "Active" } }),
-      // Recent Clients (last 4 updated)
+      prisma.client.count({ where: { ...whereClause, status: "ACTIVE" } }),
+      prisma.client.count({ where: { ...whereClause, status: "ACTIVE", createdAt: { gte: oneMonthAgo } } }),
+      prisma.measurement.count({ where: { client: { ...whereClause, status: "ACTIVE" } } }),
+      prisma.client.count({ where: { ...whereClause, status: "ACTIVE" } }),
       prisma.client.findMany({
+        where: { ...whereClause, status: "ACTIVE" },
         take: 4,
         orderBy: { updatedAt: "desc" },
         include: {
           measurements: {
             orderBy: { createdAt: "desc" },
-            take: 1, // Get only the most recent measurement for the date
+            take: 1,
           },
         },
       }),
-      // Activity: Measurements this week
-      prisma.measurement.count({ where: { createdAt: { gte: oneWeekAgo } } }),
-      // Activity: New clients this week
-      prisma.client.count({ where: { createdAt: { gte: oneWeekAgo } } }),
+      prisma.measurement.count({ where: { client: { ...whereClause, status: "ACTIVE" }, createdAt: { gte: oneWeekAgo } } }),
+      prisma.client.count({ where: { ...whereClause, status: "ACTIVE", createdAt: { gte: oneWeekAgo } } }),
     ]);
 
-    // Format recent clients to include a simplified lastMeasured date
+    // Format recent clients (logic remains the same)
     const recentClients = recentClientsData.map((client) => ({
       id: client.id,
       name: client.name,
       phone: client.phone,
       status: client.status,
-      // Use the creation date of the latest measurement, or null if none exist
       lastMeasured: client.measurements[0]?.createdAt || null,
     }));
-
+    
     // --- Assemble Response ---
     const responseData = {
       stats: {
@@ -69,8 +82,7 @@ export async function GET() {
       activitySummary: {
         measurementsThisWeek,
         newClientsThisWeek,
-        // Appointments are mocked on the frontend as they are not in the schema
-        appointmentsThisWeek: 8,
+        appointmentsThisWeek: 8, // Mocked data
       },
     };
 

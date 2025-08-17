@@ -1,0 +1,354 @@
+# Flutter Application Development Plan: Edincep Measure (Offline-First)
+**Version: 2.0**
+**Date: 2025-08-03**
+
+## 1. Project Overview
+
+This document is a self-contained blueprint for creating an **offline-first** Flutter mobile application for **Edincep Measure**. The application will serve as a mobile client for the existing Next.js backend, allowing users to manage clients and measurements with or without an internet connection.
+
+The core architecture is centered around a local SQLite database (`Drift`) that acts as the primary data source for the UI, and a synchronization service that keeps the local data consistent with the remote server.
+
+---
+
+## 2. Core Technical Specifications
+
+### 2.1. Backend API Endpoint
+The Flutter app will communicate with the existing Next.js backend.
+- **Base URL:** `https://your-production-domain.com/api` (Replace with actual domain)
+
+### 2.2. Key Dependencies
+- **Networking:** `dio`, `connectivity_plus`
+- **Local Database:** `drift`, `sqlite3_flutter_libs`, `path_provider`
+- **State Management:** `flutter_bloc`
+- **Navigation:** `go_router`
+- **Authentication:** `flutter_secure_storage`
+- **Utilities:** `intl` (formatting), `image_picker` (image uploads), `cuid_dart` (for offline ID generation).
+
+### 2.3. Authentication
+- Authentication is handled via JWT (JSON Web Tokens).
+- The Flutter app will send credentials to the `/auth/signin` endpoint.
+- The received token must be stored securely using `flutter_secure_storage`.
+- All subsequent API requests must include the token in the `Authorization` header: `Authorization: Bearer <token>`.
+
+---
+
+## 3. Phase 1: Foundation & Setup
+
+**Goal:** Prepare the development environment and establish the core architecture.
+
+1.  **Project Setup:**
+    *   Create Flutter project: `flutter create edincep_measure_app`.
+    *   Establish the directory structure (see Appendix C).
+2.  **Add Dependencies:** Add all libraries listed in section 2.2 to `pubspec.yaml`.
+3.  **Theme Implementation:**
+    *   Create a `theme.dart` file.
+    *   Implement `ThemeData` using the color palette defined in **Appendix A**.
+4.  **Navigation:**
+    *   Configure `go_router` with initial routes: `/splash`, `/login`, `/dashboard`.
+    *   Implement auth-aware redirects.
+
+---
+
+## 4. Phase 2: Data Layer (Local First)
+
+**Goal:** Define the complete data layer, including the local database, repository, and API services.
+
+1.  **Local Database (Drift):**
+    *   Define Drift table classes based on the schema in **Appendix B**.
+    *   **Crucially, add `syncStatus` and `lastModified` columns** to all user-modifiable tables (`clients`, `measurements`).
+        *   `syncStatus`: An enum (`synced`, `pendingCreate`, `pendingUpdate`).
+        *   `lastModified`: A `DateTime` to resolve sync conflicts (last write wins).
+    *   Generate DAOs (Data Access Objects) using `drift_dev`.
+2.  **Data Repository:**
+    *   Create a central `DataRepository`. This is the single point of contact for all UI data requests.
+    *   **Read methods** (e.g., `watchClients()`): Return a `Stream` from the local Drift database.
+    *   **Write methods** (e.g., `createClient(client)`):
+        *   Generate a CUID for the new client.
+        *   Write to the local Drift table with `syncStatus = 'pendingCreate'`.
+        *   The UI updates instantly from the local stream.
+
+3.  **API Service:**
+    *   Create an `ApiService` class using `dio`.
+    *   Implement methods for every endpoint listed in **Appendix D**.
+    *   Include logic to automatically attach the auth token.
+
+---
+
+## 5. Phase 3: Synchronization Service
+
+**Goal:** Implement the logic that syncs the local database with the remote server.
+
+1.  **Develop `SyncService`:**
+    *   This service runs when the app starts with a network connection, or periodically.
+2.  **Push Local Changes:**
+    *   Query local DB for records where `syncStatus` is not `synced`.
+    *   For `pendingCreate`, call the `POST` API endpoint.
+    *   For `pendingUpdate`, call the `PUT` API endpoint.
+    *   On success, update the local record's `syncStatus` to `synced`.
+3.  **Pull Remote Changes:**
+    *   Fetch data from the server (e.g., `GET /api/clients`).
+    *   Use Drift's `insertOnConflictUpdate` (upsert) to update the local database. This efficiently adds new records and updates existing ones.
+4.  **Conflict Resolution:**
+    *   Implement a "Last Write Wins" strategy. When pulling data, if a local record is `pendingUpdate`, compare its `lastModified` timestamp with the incoming server record's `updatedAt`. Only overwrite the local record if the server's version is newer.
+
+---
+
+## 6. Phase 4 & 5: Feature Implementation
+
+**Goal:** Build all application features on top of the robust data layer.
+
+1.  **Authentication:** Build login/signup screens. Login is an online-only action that triggers the initial data sync.
+2.  **Client & Measurement Management:**
+    *   Build all UI (lists, forms, detail views).
+    *   All data must be read from and written to the `DataRepository`.
+    *   **Offline Image Uploads:** When creating a measurement offline, save the local file path of the selected image. The `SyncService` must first upload the image file to `/api/upload`, get the returned URL, and then use that URL when syncing the full measurement record.
+3.  **Admin Features:** These can be implemented as online-only features, fetching directly from the API via the repository if real-time data is essential.
+
+---
+
+## 7. Phase 6 & 7: Polishing & Deployment
+
+**Goal:** Refine the UX and release the app.
+
+1.  **UX Refinements:**
+    *   Add visual indicators for `syncStatus` on list items.
+    *   Implement a global "Offline" banner.
+    *   Add loading indicators and pull-to-refresh functionality.
+2.  **Testing:** Write unit tests for the repository and sync logic, and widget tests for UI components.
+3.  **Deployment:** Follow standard procedures for building, signing, and releasing to the Google Play Store and Apple App Store.
+
+---
+---
+
+## Appendix A: Visual Theme & Colors
+
+Extracted from `globals.css`. The Flutter app should use these color values to build its `ThemeData`.
+
+**Light Theme:**
+- `background`: `hsl(0, 0%, 90%)`
+- `foreground`: `hsl(222.2, 84%, 4.9%)`
+- `card`: `hsl(0, 0%, 100%)`
+- `primary`: `hsl(262.1, 83.3%, 57.8%)`
+- `secondary`: `hsl(210, 40%, 94%)`
+- `destructive`: `hsl(0, 84.2%, 60.2%)`
+- `brand-primary`: `hsl(262.1, 83.3%, 57.8%)`
+- `brand-secondary`: `hsl(280, 100%, 70%)`
+- `brand-accent`: `hsl(45, 100%, 70%)`
+
+**Dark Theme:**
+- `background`: `hsl(222.2, 84%, 18%)`
+- `foreground`: `hsl(210, 40%, 90%)`
+- `card`: `hsl(217.2, 32.6%, 8%)`
+- `primary`: `hsl(262.1, 83.3%, 57.8%)`
+- `secondary`: `hsl(217.2, 32.6%, 12%)`
+- `destructive`: `hsl(0, 62.8%, 30.6%)`
+- `brand-primary`: `hsl(262.1, 83.3%, 67.8%)`
+- `brand-secondary`: `hsl(280, 100%, 80%)`
+- `brand-accent`: `hsl(45, 100%, 80%)`
+
+---
+
+## Appendix B: Backend Database Schema (Prisma)
+
+This is the single source of truth for all data structures.
+
+```prisma
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------
+// --- ENUMS ---
+// ---------------------------------
+
+enum Role {
+  CLIENT
+  DESIGNER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  DELETED
+}
+
+enum RecordStatus {
+  ACTIVE
+  DELETED
+}
+
+enum OrderStatus {
+  ORDER_CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  DELIVERED
+}
+
+// ---------------------------------
+// --- MODELS ---
+// ---------------------------------
+
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String?   @unique
+  emailVerified  DateTime?
+  image          String?
+  role           Role      @default(CLIENT)
+  status         UserStatus @default(ACTIVE)
+  hashedPassword String?
+  accounts       Account[]
+  logs           Log[]
+  clientProfile  Client?   @relation("ClientUser")
+  assignedClients ClientDesigner[]
+  createdMeasurements Measurement[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+}
+
+model Log {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress String?
+  os        String?
+  action    String
+  details   Json?
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@map("logs")
+}
+
+model ClientDesigner {
+  clientId   String
+  designerId String
+  assignedAt DateTime @default(now())
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  designer   User     @relation(fields: [designerId], references: [id], onDelete: Cascade)
+  @@id([clientId, designerId])
+  @@map("client_designers")
+}
+
+model Client {
+  id                String       @id @default(cuid())
+  name              String
+  phone             String?
+  email             String?
+  address           String?
+  dateOfBirth       DateTime?
+  notes             String?
+  status            RecordStatus @default(ACTIVE)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  assignedDesigners ClientDesigner[]
+  userId            String?      @unique
+  user              User?        @relation("ClientUser", fields: [userId], references: [id], onDelete: SetNull)
+  measurements      Measurement[]
+  @@index([name])
+  @@map("clients")
+}
+
+model Measurement {
+  id                 String      @id @default(cuid())
+  clientId           String
+  client             Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  creatorId          String
+  creator            User        @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  orderStatus        OrderStatus @default(ORDER_CONFIRMED)
+  status             RecordStatus @default(ACTIVE)
+  completionDeadline DateTime?
+  materialImageUrl   String?
+  designImageUrl     String?
+  // ... all measurement fields (Float?)
+  notes              String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  @@index([creatorId])
+  @@map("measurements")
+}
+```
+
+---
+
+## Appendix C: Recommended Flutter Directory Structure
+
+```
+lib/
+├── src/
+│   ├── core/
+│   │   ├── api/           # ApiService for remote data
+│   │   ├── database/      # Local SQLite database setup (Drift)
+│   │   ├── sync/          # SyncService for data synchronization
+│   │   └── theme/         # App theme
+│   ├── data/
+│   │   ├── models/        # Dart models for API data (JSON)
+│   │   ├── tables/        # Drift table definitions for SQLite
+│   │   └── repository/    # The central DataRepository
+│   ├── features/          # UI (Screens) and State (Blocs) for each feature
+│   │   ├── auth/
+│   │   ├── dashboard/
+│   │   └── clients/
+│   └── shared_widgets/    # Common reusable widgets (e.g., custom buttons)
+└── main.dart
+```
+
+---
+
+## Appendix D: Backend API Endpoints
+
+- **Auth**
+  - `POST /api/auth/signin`
+  - `POST /api/auth/register`
+  - `POST /api/auth/signout`
+
+- **Admin**
+  - `GET, POST /api/admin/users`
+  - `GET, PUT, DELETE /api/admin/users/[id]`
+  - `GET /api/admin/analytics`
+  - `GET /api/admin/logs`
+
+- **Client (as a User)**
+  - `GET /api/client/dashboard`
+  - `GET, PUT /api/client/profile`
+  - `GET, POST /api/client/measurements`
+  - `GET, PUT, DELETE /api/client/measurements/[sessionId]`
+  - `GET /api/client/measurements/[sessionId]/pdf`
+
+- **Clients (as a Designer)**
+  - `GET, POST /api/clients`
+  - `GET, PUT, DELETE /api/clients/[id]`
+  - `GET, POST /api/clients/[id]/measurements`
+  - `GET, PUT, DELETE /api/clients/[id]/measurements/[sessionId]`
+
+- **General**
+  - `GET /api/dashboard`
+  - `GET /api/dashboard/stats`
+  - `GET, PUT, DELETE /api/measurements/[id]`
+  - `GET /api/measurements/[id]/pdf`
+  - `POST /api/upload`
+  - `GET /api/health`

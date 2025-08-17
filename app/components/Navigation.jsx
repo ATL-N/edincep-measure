@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { useTheme } from "./ThemeProvider";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import {
   HomeIcon,
   UsersIcon,
@@ -14,6 +14,7 @@ import {
   SunIcon,
   MoonIcon,
   DocumentTextIcon,
+  ArrowDownOnSquareIcon as LogOutIcon,
 } from "@heroicons/react/24/outline";
 import {
   HomeIcon as HomeIconSolid,
@@ -145,6 +146,14 @@ const getMobileNavigation = (role) => {
           iconSolid: CogIconSolid,
           label: "Settings",
         },
+        {
+          name: "Sign Out",
+          href: "#",
+          icon: LogOutIcon,
+          iconSolid: LogOutIcon,
+          label: "Sign Out",
+          onClick: () => signOut({ callbackUrl: '/login' }),
+        },
       ];
     case "DESIGNER":
       return [
@@ -183,6 +192,14 @@ const getMobileNavigation = (role) => {
           iconSolid: CogIconSolid,
           label: "Settings",
         },
+        {
+          name: "Sign Out",
+          href: "#",
+          icon: LogOutIcon,
+          iconSolid: LogOutIcon,
+          label: "Sign Out",
+          onClick: () => signOut({ callbackUrl: '/login' }),
+        },
       ];
     case "CLIENT":
       return [
@@ -207,6 +224,14 @@ const getMobileNavigation = (role) => {
           iconSolid: DocumentTextIconSolid,
           label: "History",
         },
+        {
+          name: "Sign Out",
+          href: "#",
+          icon: LogOutIcon,
+          iconSolid: LogOutIcon,
+          label: "Sign Out",
+          onClick: () => signOut({ callbackUrl: '/login' }),
+        },
       ];
     default:
       return [];
@@ -222,12 +247,18 @@ export function Navigation() {
   const navigation = getNavigation(userRole);
   const mobileNavigation = getMobileNavigation(userRole);
 
+  const dashboardUrl = {
+    ADMIN: "/pages/admin/dashboard",
+    DESIGNER: "/pages/dashboard",
+    CLIENT: "/client/dashboard",
+  }[userRole] || "/";
+
   return (
     <>
       {/* Desktop Navigation */}
       <nav className="hidden md:flex fixed top-6 left-1/2 transform -translate-x-1/2 z-50 glass rounded-full px-6 py-3">
         <div className="flex items-center space-x-6">
-          <Link href="/" className="flex items-center space-x-2">
+          <Link href={dashboardUrl} className="flex items-center space-x-2">
             <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center animate-pulse-glow">
               <span className="text-white font-bold text-sm">E</span>
             </div>
@@ -268,23 +299,32 @@ export function Navigation() {
             })}
           </div>
 
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-full hover:bg-muted/50 transition-all duration-300 hover:scale-110 animate-float"
-          >
-            {theme === "light" ? (
-              <MoonIcon className="w-5 h-5" />
-            ) : (
-              <SunIcon className="w-5 h-5" />
-            )}
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-full hover:bg-muted/50 transition-all duration-300 hover:scale-110 animate-float"
+            >
+              {theme === "light" ? (
+                <MoonIcon className="w-5 h-5" />
+              ) : (
+                <SunIcon className="w-5 h-5" />
+              )}
+            </button>
+            <button
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              className="p-2 rounded-full hover:bg-muted/50 transition-all duration-300 hover:scale-110"
+              title="Sign Out"
+            >
+              <LogOutIcon className="w-5 h-5 text-red-500" />
+            </button>
+          </div>
         </div>
       </nav>
 
       {/* Mobile Top Bar */}
       <nav className="md:hidden fixed top-0 left-0 right-0 z-50 glass border-b">
         <div className="flex items-center justify-between px-4 py-3">
-          <Link href="/" className="flex items-center space-x-2">
+          <Link href={dashboardUrl} className="flex items-center space-x-2">
             <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center animate-pulse-glow">
               <span className="text-white font-bold text-sm">E</span>
             </div>
@@ -312,15 +352,13 @@ export function Navigation() {
             const IconSolid = item.iconSolid;
             const isActive = pathname === item.href;
 
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
+            const content = (
+              <div
                 className={`relative flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-300 min-w-0 flex-1 ${
                   isActive
                     ? "text-primary bg-primary/10 scale-105"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/30 hover:scale-105"
-                }`}
+                } ${item.name === "Sign Out" ? "text-red-500" : ""}`}
               >
                 <div className="relative">
                   {isActive ? (
@@ -348,7 +386,7 @@ export function Navigation() {
                 >
                   {item.label}
                 </span>
-                {isActive && (
+                {isActive && item.name !== "Sign Out" && (
                   <motion.div
                     className="absolute top-0 left-1/2 w-8 h-1 bg-primary rounded-full"
                     initial={{ x: "-50%", scale: 0 }}
@@ -360,6 +398,16 @@ export function Navigation() {
                     }}
                   />
                 )}
+              </div>
+            );
+
+            return item.onClick ? (
+              <button key={item.name} onClick={item.onClick} className="flex-1 min-w-0">
+                {content}
+              </button>
+            ) : (
+              <Link key={item.name} href={item.href} className="flex-1 min-w-0">
+                {content}
               </Link>
             );
           })}

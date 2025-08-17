@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   Settings as SettingsIcon,
   Palette,
@@ -18,56 +19,59 @@ import {
   Sun,
   Monitor,
 } from "lucide-react";
-import { useTheme } from "../../components/ThemeProvider"; // Assuming this path is correct
+import { useTheme } from "../../components/ThemeProvider";
 
 export default function Settings() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+  const { data: session, update } = useSession();
   const [activeTab, setActiveTab] = useState("general");
-  const [settings, setSettings] = useState({
-    notifications: {
-      emailNotifications: true,
-      pushNotifications: false,
-      measurementReminders: true,
-    },
-    measurements: {
-      defaultUnit: "inches",
-      precision: 1,
-      autoSave: true,
-    },
-    appearance: {
-      compactMode: false,
-      animationsEnabled: true,
-    },
-    privacy: {
-      dataRetention: "1year",
-      shareAnalytics: false,
-    },
-  });
+  const [measurementUnit, setMeasurementUnit] = useState("INCH");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
 
   const tabs = [
     { id: "general", label: "General", icon: SettingsIcon },
-    { id: "appearance", label: "Appearance", icon: Palette },
-    { id: "notifications", label: "Notifications", icon: Bell },
-    { id: "data", label: "Data & Privacy", icon: Database },
-    { id: "security", label: "Security", icon: Shield },
+    // { id: "appearance", label: "Appearance", icon: Palette },
+    // { id: "notifications", label: "Notifications", icon: Bell },
+    // { id: "data", label: "Data & Privacy", icon: Database },
+    // { id: "security", label: "Security", icon: Shield },
   ];
 
-  const handleSettingChange = (category, setting, value) => {
-    setSettings((prev) => ({
-      ...prev,
-      [category]: {
-        ...prev[category],
-        [setting]: value,
-      },
-    }));
-  };
+  useEffect(() => {
+    if (session?.user?.measurementUnit) {
+      setMeasurementUnit(session.user.measurementUnit);
+    }
+  }, [session]);
 
   const handleSave = async () => {
     setSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setSaving(false);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await fetch('/api/user/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ measurementUnit }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to save settings.");
+      }
+
+      // This is a NextAuth.js specific function to trigger a session update
+      // on the client, ensuring the new preference is available immediately.
+      await update({ measurementUnit });
+
+      setSuccess("Settings saved successfully!");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSuccess(null), 3000); // Clear success message after 3s
+    }
   };
 
   const itemVariants = {
@@ -108,52 +112,14 @@ export default function Settings() {
                     Default Unit
                   </label>
                   <select
-                    value={settings.measurements.defaultUnit}
-                    onChange={(e) =>
-                      handleSettingChange(
-                        "measurements",
-                        "defaultUnit",
-                        e.target.value
-                      )
-                    }
+                    value={measurementUnit}
+                    onChange={(e) => setMeasurementUnit(e.target.value)}
                     className="w-full bg-background/50 border border-border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    <option value="inches">Inches</option>
-                    <option value="cm">Centimeters</option>
+                    <option value="INCH">Inches</option>
+                    <option value="CENTIMETER">Centimeters</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Measurement Precision
-                  </label>
-                  <select
-                    value={settings.measurements.precision}
-                    onChange={(e) =>
-                      handleSettingChange(
-                        "measurements",
-                        "precision",
-                        parseInt(e.target.value)
-                      )
-                    }
-                    className="w-full bg-background/50 border border-border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value={0}>Whole numbers (36)</option>
-                    <option value={1}>One decimal (36.5)</option>
-                    <option value={2}>Two decimals (36.25)</option>
-                  </select>
-                </div>
-                <ToggleSwitch
-                  title="Auto-save measurements"
-                  description="Automatically save as you type"
-                  checked={settings.measurements.autoSave}
-                  onChange={(e) =>
-                    handleSettingChange(
-                      "measurements",
-                      "autoSave",
-                      e.target.checked
-                    )
-                  }
-                />
               </div>
             </div>
           </div>
@@ -206,7 +172,7 @@ export default function Settings() {
                 <ToggleSwitch
                   title="Compact Mode"
                   description="Reduce spacing for more content"
-                  checked={settings.appearance.compactMode}
+                  checked={tabs.appearance.compactMode}
                   onChange={(e) =>
                     handleSettingChange(
                       "appearance",
@@ -504,7 +470,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="container max-w-5xl mx-auto py-8 px-4">
+    <div className="container max-w-5xl mx-auto py-8 px-4 mt-20">
       <div className="flex items-center mb-6 md:mb-8">
         <button
           onClick={() => router.back()}
@@ -579,7 +545,9 @@ export default function Settings() {
           >
             {renderTabContent()}
 
-            <div className="mt-8 pt-6 border-t border-border flex justify-end">
+            <div className="mt-8 pt-6 border-t border-border flex items-center justify-end gap-4">
+              {success && <p className="text-sm text-green-500">{success}</p>}
+              {error && <p className="text-sm text-red-500">{error}</p>}
               <button
                 onClick={handleSave}
                 disabled={saving}

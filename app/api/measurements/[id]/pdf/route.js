@@ -10,23 +10,42 @@ const prisma = new PrismaClient();
 export async function GET(request, { params }) {
   const { id } = params;
   const user = await getCurrentUser(request);
-  console.log('sdsfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', id)
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const measurement = await prisma.measurement.findFirst({
-      where: { id: id },
-      include: { client: true },
-    });
+    // Fetch both the measurement and the user's preference in parallel
+    const [measurement, userPrefs] = await Promise.all([
+      prisma.measurement.findFirst({
+        where: { id: id },
+        include: { client: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { measurementUnit: true },
+      }),
+    ]);
 
     if (!measurement) {
       return NextResponse.json({ error: "Measurement not found" }, { status: 404 });
     }
 
     const doc = new jsPDF();
+    
+    // --- Unit Conversion Logic ---
+    const unitPreference = userPrefs?.measurementUnit || "INCH";
+    const displayUnit = unitPreference === "CENTIMETER" ? "cm" : "in";
+
+    const convertValue = (valueInInches) => {
+      if (valueInInches === null || valueInInches === undefined) return '-';
+      if (unitPreference === 'CENTIMETER') {
+        return (valueInInches * 2.54).toFixed(2);
+      }
+      // Round inches to two decimal places as well for consistency
+      return parseFloat(valueInInches).toFixed(2);
+    };
     
     // --- Helper Functions ---
     const formatName = (key) => {
@@ -45,7 +64,7 @@ export async function GET(request, { params }) {
 
     // --- Data Restructuring ---
     const categorizedData = {};
-    const nonMeasurementKeys = new Set(['id', 'clientId', 'creatorId', 'status', 'completionDeadline', 'materialImageUrl', 'designImageUrl', 'notes', 'createdAt', 'updatedAt', 'client']);
+    const nonMeasurementKeys = new Set(['id', 'clientId', 'creatorId', 'status', 'orderStatus', 'completionDeadline', 'materialImageUrl', 'designImageUrl', 'notes', 'createdAt', 'updatedAt', 'client']);
     
     for (const key in measurement) {
         if (nonMeasurementKeys.has(key) || measurement[key] === null) continue;
@@ -70,17 +89,17 @@ export async function GET(request, { params }) {
         if (!categorizedData[category]) categorizedData[category] = {};
         if (!categorizedData[category][displayName]) categorizedData[category][displayName] = {};
         
-        categorizedData[category][displayName][fitType] = measurement[key];
+        // Apply conversion here
+        categorizedData[category][displayName][fitType] = convertValue(measurement[key]);
     }
 
     // --- PDF Generation ---
-    // const doc = new jsPDF();
     doc.setFontSize(20);
     doc.text("Measurement Details", 14, 22);
     doc.setFontSize(11);
     doc.text(`Client: ${measurement.client.name}`, 14, 32);
     doc.text(`Date: ${new Date(measurement.createdAt).toLocaleDateString()}`, 14, 38);
-    doc.text(`Status: ${measurement.status.replace(/_/g, ' ').toLowerCase()}`, 14, 44);
+    doc.text(`Status: ${measurement.orderStatus.replace(/_/g, ' ').toLowerCase()}`, 14, 44);
 
     let yPos = 55;
 
@@ -91,7 +110,7 @@ export async function GET(request, { params }) {
         doc.setFontSize(10);
         const notesLines = doc.splitTextToSize(measurement.notes, 180);
         doc.text(notesLines, 14, yPos);
-        yPos += (notesLines.length * 4) + 10; // Adjust space after notes
+        yPos += (notesLines.length * 4) + 10;
     }
 
     const tableData = [];
@@ -100,7 +119,6 @@ export async function GET(request, { params }) {
     for (const category of categoryOrder) {
         if (!categorizedData[category]) continue;
 
-        // Add a header row for the category
         tableData.push([{ content: category, colSpan: 4, styles: { fontStyle: 'bold', fillColor: [230, 230, 230] } }]);
 
         for (const name in categorizedData[category]) {
@@ -116,12 +134,17 @@ export async function GET(request, { params }) {
 
     autoTable(doc, {
         startY: yPos,
-        head: [['Measurement', 'Snug', 'Static', 'Dynamic']],
+        head: [[
+            'Measurement',
+            `Snug (${displayUnit})`,
+            `Static (${displayUnit})`,
+            `Dynamic (${displayUnit})`
+        ]],
         body: tableData,
         theme: 'grid',
         headStyles: { fillColor: [41, 128, 185] },
         didParseCell: function (data) {
-            if (data.row.raw?.[0]?.styles) { // Check for our category row
+            if (data.row.raw?.[0]?.styles) {
                 data.cell.styles.halign = 'center';
             }
         }

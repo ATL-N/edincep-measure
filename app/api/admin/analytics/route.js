@@ -1,49 +1,77 @@
 // @/app/api/admin/analytics/route.js
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Role } from "@prisma/client";
+import { getCurrentUser } from "@/lib/session";
 
 const prisma = new PrismaClient();
 
 export async function GET(request) {
   try {
-    const totalUsers = await prisma.user.count();
-    const totalClients = await prisma.client.count();
-    const totalMeasurements = await prisma.measurement.count();
+    const user = await getCurrentUser(request);
 
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    if (!user || user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const newUsersLast7Days = await prisma.user.count({
-      where: { createdAt: { gte: sevenDaysAgo } },
-    });
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const userRegistrationChart = await prisma.user.groupBy({
-      by: ["createdAt"],
-      _count: {
-        createdAt: true,
-      },
-      where: { createdAt: { gte: sevenDaysAgo } },
-      orderBy: {
-        createdAt: "asc",
-      },
-    });
+    const [
+      totalUsers,
+      totalClients,
+      totalMeasurements,
+      userRoleDistribution,
+      clientGrowthData,
+    ] = await Promise.all([
+      prisma.user.count({ where: { status: 'ACTIVE' } }),
+      prisma.client.count({ where: { status: 'ACTIVE' } }),
+      prisma.measurement.count({ where: { status: 'ACTIVE' } }),
+      prisma.user.groupBy({
+        by: ['role'],
+        _count: {
+          id: true,
+        },
+        where: { status: 'ACTIVE' },
+      }),
+      prisma.client.groupBy({
+        by: ['createdAt'],
+        _count: {
+          id: true,
+        },
+        where: {
+          status: 'ACTIVE',
+          createdAt: {
+            gte: thirtyDaysAgo,
+          },
+        },
+        orderBy: {
+          createdAt: 'asc',
+        },
+      }),
+    ]);
 
-    const formattedChartData = userRegistrationChart.map((data) => ({
-      date: new Date(data.createdAt).toLocaleDateString(),
-      count: data._count.createdAt,
+    const clientGrowthChart = clientGrowthData.map(item => ({
+      date: item.createdAt.toISOString().split('T')[0], // Format as YYYY-MM-DD
+      count: item._count.id,
     }));
+
+    const roleDistribution = userRoleDistribution.reduce((acc, role) => {
+      acc[role.role] = role._count.id;
+      return acc;
+    }, {});
 
     return NextResponse.json({
       totalUsers,
       totalClients,
       totalMeasurements,
-      newUsersLast7Days,
-      userRegistrationChart: formattedChartData,
+      roleDistribution,
+      clientGrowthChart,
     });
+
   } catch (error) {
-    console.error("Analytics Error:", error);
+    console.error("Admin Analytics Error:", error);
     return NextResponse.json(
-      { error: "An unexpected error occurred while fetching analytics data." },
+      { error: "Failed to fetch admin analytics data." },
       { status: 500 }
     );
   }

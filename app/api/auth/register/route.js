@@ -1,4 +1,4 @@
-// app/api/register/route.js
+// /api/auth/register/route.js
 import { PrismaClient, Role } from "@prisma/client"; // <-- IMPORTANT: Import the Role enum
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";

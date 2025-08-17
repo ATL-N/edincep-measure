@@ -16,18 +16,31 @@ export async function GET(request, { params }) {
   }
 
   try {
+    // Find the client profile associated with the logged-in user to ensure authorization
+    const clientProfile = await prisma.client.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+
+    if (!clientProfile) {
+      return NextResponse.json(
+        { error: "Client profile not found for this user." },
+        { status: 404 }
+      );
+    }
+
     const measurement = await prisma.measurement.findFirst({
       where: {
         id: sessionId,
-        clientId: user.clientId,
+        clientId: clientProfile.id, // Authorize by checking against the user's client ID
       },
     });
 
-      // console.log("session_iddddddddddddddddddddddddddddddddd 8886666666666666:", measurement);
-
-
     if (!measurement) {
-      return NextResponse.json({ error: "Measurement not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Measurement not found or you do not have permission to view it." },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json(measurement);

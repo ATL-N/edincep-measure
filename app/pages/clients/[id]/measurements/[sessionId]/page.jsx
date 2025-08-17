@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   ArrowLeft,
   Calendar,
@@ -21,6 +22,7 @@ import {
   Target,
   ChevronDown,
   ChevronUp,
+  Trash2,
 } from "lucide-react";
 
 // Icons for categories
@@ -56,6 +58,19 @@ export default function MeasurementDetailPage() {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  const { data: sessionData } = useSession();
+  const measurementUnit = sessionData?.user?.measurementUnit || "INCH";
+
+  const convertValue = (value) => {
+    if (value === null || value === undefined) return null;
+    if (measurementUnit === 'CENTIMETER') {
+      return (value * 2.54).toFixed(2);
+    }
+    return value;
+  };
+
+  const displayUnit = measurementUnit === 'CENTIMETER' ? 'cm' : 'in';
 
   useEffect(() => {
     if (!id || !sessionId) return;
@@ -168,6 +183,25 @@ export default function MeasurementDetailPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (window.confirm("Are you sure you want to delete this measurement session? This action cannot be undone.")) {
+      setError(null);
+      try {
+        const response = await fetch(`/api/clients/${id}/measurements/${sessionId}`, {
+          method: 'DELETE',
+        });
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || "Failed to delete session.");
+        }
+        // On successful deletion, redirect back to the client's measurement history
+        router.push(`/pages/clients/${id}/measurements`);
+      } catch (err) {
+        setError(err.message);
+      }
+    }
+  };
+
   const handleDownload = () => {
       const a = document.createElement('a');
       a.href = pdfUrl;
@@ -232,7 +266,7 @@ export default function MeasurementDetailPage() {
               </h1>
               <div className="flex space-x-2">
                 <button
-                  onClick={() => router.push(`/pages/clients/${id}/measurements/new?sessionId=${sessionId}`)}
+                  onClick={() => router.push(`/pages/clients/${id}/measurements/${sessionId}/edit`)}
                   className="p-2 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                   title="Edit Session"
                 >
@@ -245,6 +279,13 @@ export default function MeasurementDetailPage() {
                   title="Preview & Download PDF"
                 >
                   {isGenerating ? <div className="w-5 h-5 border-2 border-dashed rounded-full animate-spin" /> : <Download className="w-5 h-5" />}
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="p-2 rounded-full bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                  title="Delete Session"
+                >
+                  <Trash2 className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() => router.back()}
@@ -498,30 +539,30 @@ export default function MeasurementDetailPage() {
                               </td>
                               <td className="py-4 px-2 text-center">
                                 <div className="text-lg font-bold text-green-500">
-                                  {m.snug || "—"}
+                                  {convertValue(m.snug) || "—"}
                                   {m.snug && (
                                     <span className="text-xs text-muted-foreground ml-1">
-                                      {m.unit}
+                                      {displayUnit}
                                     </span>
                                   )}
                                 </div>
                               </td>
                               <td className="py-4 px-2 text-center">
                                 <div className="text-lg font-bold text-blue-500">
-                                  {m.static || "—"}
+                                  {convertValue(m.static) || "—"}
                                   {m.static && (
                                     <span className="text-xs text-muted-foreground ml-1">
-                                      {m.unit}
+                                      {displayUnit}
                                     </span>
                                   )}
                                 </div>
                               </td>
                               <td className="py-4 px-2 text-center">
                                 <div className="text-lg font-bold text-purple-500">
-                                  {m.dynamic || "—"}
+                                  {convertValue(m.dynamic) || "—"}
                                   {m.dynamic && (
                                     <span className="text-xs text-muted-foreground ml-1">
-                                      {m.unit}
+                                      {displayUnit}
                                     </span>
                                   )}
                                 </div>
