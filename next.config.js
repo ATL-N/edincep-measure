@@ -1,11 +1,16 @@
 module.exports = {
-  output: "standalone", // Important for Docker deployments
-  images: {
-    unoptimized: true, // This can help with image loading in Docker
-    domains: [], // Add any external domains if needed
-  },
+  output: "standalone",
   async headers() {
     return [
+      {
+        source: "/uploads/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
       {
         source: "/api/:path*",
         headers: [
