@@ -32,7 +32,8 @@ RUN apk update && \
 
 # Create a non-root user
 RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN adduser --system --uid 1001 nextjs --ingroup nodejs
+
 
 # Copy necessary files from builder
 COPY --from=builder /app/package*.json ./
@@ -49,7 +50,7 @@ RUN mkdir -p /app/public/uploads
 RUN chown -R nextjs:nodejs /app/public/uploads
 RUN chmod -R 755 /app/public/uploads
 
-# Set proper ownership for the app directory
+# Set proper ownership for the entire app directory
 RUN chown -R nextjs:nodejs /app
 USER nextjs
 

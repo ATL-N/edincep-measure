@@ -1,5 +1,13 @@
 module.exports = {
   output: "standalone",
+  async rewrites() {
+    return [
+      {
+        source: "/uploads/:path*",
+        destination: "/uploads/:path*",
+      },
+    ];
+  },
   async headers() {
     return [
       {
