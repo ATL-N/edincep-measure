@@ -1,13 +1,15 @@
 module.exports = {
-  output: "standalone", // Important for Docker deployments
+  output: "standalone", // Good for Docker
   images: {
-    unoptimized: true, // This can help with image loading in Docker
-    domains: [], // Add any external domains if needed
+    // Remove unoptimized: true to keep image optimization
+    // Remove domains: [] as it's not needed for local images
+    // Only add remotePatterns if you need external images
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "edinception.online",
-      },
+      // Only uncomment and configure if you need external images
+      // {
+      //   protocol: "https",
+      //   hostname: "example.com",
+      // },
     ],
   },
   async headers() {
