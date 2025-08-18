@@ -79,7 +79,7 @@ services:
     image: postgres:15-alpine
     
     ports:
-      - "5440:5432"
+      - "5441:5432"
     environment:
       - POSTGRES_USER=${DB_USER:-postgres}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
