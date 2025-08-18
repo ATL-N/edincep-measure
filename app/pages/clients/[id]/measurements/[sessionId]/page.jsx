@@ -136,14 +136,6 @@ export default function MeasurementDetailPage() {
     visible: { y: 0, opacity: 1 },
   };
 
-  const getAbsoluteUrl = (url) => {
-    if (!url) return "";
-    if (url.startsWith("http")) {
-      return url;
-    }
-    return `${window.location.origin}${url}`;
-  };
-
   if (isLoading) return <MeasurementDetailSkeleton />;
 
   if (error) {
@@ -416,13 +408,13 @@ export default function MeasurementDetailPage() {
                   {session.materialImageUrl && (
                     <div>
                       <p className="text-sm text-muted-foreground mb-2">Material Image:</p>
-                      <img src={getAbsoluteUrl(session.materialImageUrl)} alt="Material" className="w-full h-48 object-cover rounded-lg shadow-md" />
+                      <img src={session.materialImageUrl} alt="Material" className="w-full h-48 object-cover rounded-lg shadow-md" />
                     </div>
                   )}
                   {session.designImageUrl && (
                     <div>
                       <p className="text-sm text-muted-foreground mb-2">Design Image:</p>
-                      <img src={getAbsoluteUrl(session.designImageUrl)} alt="Design" className="w-full h-48 object-cover rounded-lg shadow-md" />
+                      <img src={session.designImageUrl} alt="Design" className="w-full h-48 object-cover rounded-lg shadow-md" />
                     </div>
                   )}
                 </div>
