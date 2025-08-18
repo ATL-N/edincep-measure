@@ -1,16 +1,8 @@
 module.exports = {
-  output: "standalone", // Good for Docker
+  output: "standalone", // Important for Docker deployments
   images: {
-    // Remove unoptimized: true to keep image optimization
-    // Remove domains: [] as it's not needed for local images
-    // Only add remotePatterns if you need external images
-    remotePatterns: [
-      // Only uncomment and configure if you need external images
-      // {
-      //   protocol: "https",
-      //   hostname: "example.com",
-      // },
-    ],
+    unoptimized: true, // This can help with image loading in Docker
+    domains: [], // Add any external domains if needed
   },
   async headers() {
     return [
