@@ -17,15 +17,15 @@ services:
       - PORT=3009
     labels:
       - traefik.enable=true
-      - traefik.http.routers.measure-mate-http.rule=Host(`${DOMAIN}`)
-      - traefik.http.routers.measure-mate-http.entrypoints=http
-      - traefik.http.routers.measure-mate-http.middlewares=https-redirect
-      - traefik.http.routers.measure-mate-https.rule=Host(`${DOMAIN}`)
-      - traefik.http.routers.measure-mate-https.entrypoints=https
-      - traefik.http.routers.measure-mate-https.tls=true
-      - traefik.http.routers.measure-mate-https.tls.certresolver=le
-      - traefik.http.routers.measure-mate-https.service=measure-mate-service
-      - traefik.http.services.measure-mate-service.loadbalancer.server.port=3009
+      - traefik.http.routers.measuremate-http.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.measuremate-http.entrypoints=http
+      - traefik.http.routers.measuremate-http.middlewares=https-redirect
+      - traefik.http.routers.measuremate-https.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.measuremate-https.entrypoints=https
+      - traefik.http.routers.measuremate-https.tls=true
+      - traefik.http.routers.measuremate-https.tls.certresolver=le
+      - traefik.http.routers.measuremate-https.service=measuremate-service
+      - traefik.http.services.measuremate-service.loadbalancer.server.port=3009
     depends_on:
       measurematehost:
         condition: service_healthy
