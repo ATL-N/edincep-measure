@@ -30,22 +30,30 @@ ENV NODE_ENV production
 RUN apk update && \
     apk add --no-cache postgresql-client curl
 
+# Create a non-root user
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
 # Copy necessary files from builder
 COPY --from=builder /app/package*.json ./
-# COPY --from=builder /app/next.config.js ./
+COPY --from=builder /app/next.config.js ./
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/.next/static ./.next/static
 
 # Copy Prisma schema for migrations
 COPY --from=builder /app/prisma ./prisma
 
-EXPOSE 3000
+# Create uploads directory with proper permissions
+RUN mkdir -p /app/public/uploads
+RUN chown -R nextjs:nodejs /app/public/uploads
+RUN chmod -R 755 /app/public/uploads
 
-# Add healthcheck
-# HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-#     CMD curl -f http://localhost:3000/api/health || exit 1
+# Set proper ownership for the app directory
+RUN chown -R nextjs:nodejs /app
+USER nextjs
+
+EXPOSE 3000
 
 # Run Prisma migrations and start the application
 CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
