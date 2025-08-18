@@ -158,6 +158,8 @@ export default function MeasurementFormPage() {
           const clientData = await clientRes.json();
           const { session: rawSessionData } = await sessionRes.json();
 
+          setClientName(clientData.name);
+
           const displayMeasurements = {};
           for (const key in rawSessionData) {
             if (key.includes('Snug') || key.includes('Static') || key.includes('Dynamic')) {
@@ -167,7 +169,10 @@ export default function MeasurementFormPage() {
           setMeasurements(displayMeasurements);
           setNotes(rawSessionData.notes || "");
           setOrderStatus(rawSessionData.status || "ORDER_CONFIRMED");
-          // ... (rest of the state setting)
+          setCompletionDeadline(rawSessionData.completionDeadline ? new Date(rawSessionData.completionDeadline).toISOString().split('T')[0] : "");
+          setMaterialImageUrl(rawSessionData.materialImageUrl || "");
+          setDesignImageUrl(rawSessionData.designImageUrl || "");
+
         } else {
           const res = await fetch(`/api/clients/${clientId}`);
           if (!res.ok) throw new Error("Failed to load client details.");
@@ -201,20 +206,57 @@ export default function MeasurementFormPage() {
     setIsSaving(true);
     setError(null);
 
-    // ... (image upload logic is the same)
+    let finalMaterialImageUrl = materialImageUrl;
+    let finalDesignImageUrl = designImageUrl;
 
     try {
+       // Upload material image if a new one is selected
+      if (materialFile) {
+        const formData = new FormData();
+        formData.append("file", materialFile);
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        if (!uploadRes.ok) {
+          const errData = await uploadRes.json();
+          throw new Error(errData.error || "Failed to upload material image.");
+        }
+        const uploadResult = await uploadRes.json();
+        finalMaterialImageUrl = uploadResult.path;
+      }
+
+      // Upload design image if a new one is selected
+      if (designFile) {
+        const formData = new FormData();
+        formData.append("file", designFile);
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        if (!uploadRes.ok) {
+          const errData = await uploadRes.json();
+          throw new Error(errData.error || "Failed to upload design image.");
+        }
+        const uploadResult = await uploadRes.json();
+        finalDesignImageUrl = uploadResult.path;
+      }
+
       const url = isEditMode
         ? `/api/clients/${clientId}/measurements/${sessionId}`
         : `/api/clients/${clientId}/measurements`;
       const method = isEditMode ? "PUT" : "POST";
 
       const storageMeasurements = {};
-      const sourceData = isEditMode ? measurements : { ...lastMeasurements, ...measurements };
+      // For a new session, we need to merge the last measurements with the new ones.
+      // For an edit session, we just use the current measurements state.
+      const sourceDataForNew = { ...lastMeasurements, ...measurements };
+      const sourceData = isEditMode ? measurements : sourceDataForNew;
 
       for (const key in sourceData) {
+        // We only want to convert actual measurement fields, not other properties like 'notes'.
         if (key.includes('Snug') || key.includes('Static') || key.includes('Dynamic')) {
-          storageMeasurements[key] = convertToStorage(sourceData[key]);
+            storageMeasurements[key] = convertToStorage(sourceData[key]);
         }
       }
 
@@ -223,7 +265,8 @@ export default function MeasurementFormPage() {
         ...storageMeasurements,
         status: orderStatus,
         completionDeadline,
-        // ... (image URLs)
+        materialImageUrl: finalMaterialImageUrl,
+        designImageUrl: finalDesignImageUrl,
       };
 
       const response = await fetch(url, {

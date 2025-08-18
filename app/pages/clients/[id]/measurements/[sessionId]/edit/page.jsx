@@ -153,29 +153,42 @@ export default function MeasurementEditPage() {
         if (!sessionRes.ok) throw new Error("Failed to load session data.");
 
         const clientData = await clientRes.json();
-        const { session } = await sessionRes.json();
+        const { session: rawSessionData } = await sessionRes.json();
 
         setClientName(clientData.name);
-        setMeasurements(session || {});
-        setNotes(session.notes || "");
-        setOrderStatus(session.status || "ORDER_CONFIRMED");
+        
+        // Convert raw measurements to display unit for editing
+        const displayMeasurements = {};
+        for (const key in rawSessionData) {
+          if (key.includes('Snug') || key.includes('Static') || key.includes('Dynamic')) {
+            displayMeasurements[key] = convertToDisplay(rawSessionData[key]);
+          } else {
+            displayMeasurements[key] = rawSessionData[key];
+          }
+        }
+        
+        setMeasurements(displayMeasurements);
+        setNotes(rawSessionData.notes || "");
+        setOrderStatus(rawSessionData.status || "ORDER_CONFIRMED");
         setCompletionDeadline(
-          session.completionDeadline
-            ? new Date(session.completionDeadline)
+          rawSessionData.completionDeadline
+            ? new Date(rawSessionData.completionDeadline)
                 .toISOString()
                 .split("T")[0]
             : ""
         );
-        setMaterialImageUrl(session.materialImageUrl || "");
-        setDesignImageUrl(session.designImageUrl || "");
+        setMaterialImageUrl(rawSessionData.materialImageUrl || "");
+        setDesignImageUrl(rawSessionData.designImageUrl || "");
       } catch (err) {
         setError(err.message);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchData();
-  }, [clientId, sessionId]);
+    if (session) {
+      fetchData();
+    }
+  }, [clientId, sessionId, session]);
 
   const handleMeasurementChange = (fieldName, type, value) => {
     const key = `${fieldName}${type.charAt(0).toUpperCase() + type.slice(1)}`;
@@ -194,6 +207,7 @@ export default function MeasurementEditPage() {
     let finalDesignImageUrl = designImageUrl;
 
     try {
+      // Upload material image if a new one is selected
       if (materialFile) {
         const formData = new FormData();
         formData.append("file", materialFile);
@@ -209,6 +223,7 @@ export default function MeasurementEditPage() {
         finalMaterialImageUrl = uploadResult.path;
       }
 
+      // Upload design image if a new one is selected
       if (designFile) {
         const formData = new FormData();
         formData.append("file", designFile);
@@ -227,9 +242,20 @@ export default function MeasurementEditPage() {
       const url = `/api/clients/${clientId}/measurements/${sessionId}`;
       const method = "PUT";
 
+      // Convert measurements from display unit to storage unit (inches)
+      const storageMeasurements = {};
+      for (const key in measurements) {
+        if (key.includes('Snug') || key.includes('Static') || key.includes('Dynamic')) {
+          storageMeasurements[key] = convertToStorage(measurements[key]);
+        } else {
+          // Non-measurement fields pass through unchanged
+          storageMeasurements[key] = measurements[key];
+        }
+      }
+
       const body = {
         notes,
-        ...measurements,
+        ...storageMeasurements,
         status: orderStatus,
         completionDeadline,
         materialImageUrl: finalMaterialImageUrl,
