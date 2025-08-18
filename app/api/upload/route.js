@@ -39,6 +39,11 @@ export async function POST(request) {
 
     await writeFile(path, buffer);
 
+    // Construct the full URL for the uploaded file
+    const protocol = request.headers.get("x-forwarded-proto") || "http";
+    const host = request.headers.get("host");
+    const fullUrl = `${protocol}://${host}/uploads/${filename}`;
+
     const { ipAddress, os } = getClientInfo(request);
     await prisma.log.create({
       data: {
@@ -48,14 +53,14 @@ export async function POST(request) {
         os,
         details: {
           filename: file.name,
-          filePath: `/uploads/${filename}`,
+          filePath: fullUrl, // Log the full URL
         },
       },
     });
 
     return NextResponse.json({ 
       success: true, 
-      path: `/uploads/${filename}` 
+      path: fullUrl // Return the full URL
     });
     
   } catch (error) {
