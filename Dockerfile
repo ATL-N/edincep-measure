@@ -2,31 +2,58 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-FROM node:18-alpine AS runner
-
-WORKDIR /app
-ENV NODE_ENV='production'
-
+# Install PostgreSQL client and other dependencies
 RUN apk update && \
     apk add --no-cache postgresql-client curl
 
+# Install dependencies
+COPY package*.json ./
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Build the Next.js application
+RUN npm run build
+
+# Production image
+FROM node:18-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV production
+
+# Install PostgreSQL client for production image
+RUN apk update && \
+    apk add --no-cache postgresql-client curl
+
+# Create a non-root user
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copy necessary files from builder
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/next.config.js ./
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 
-# Add this line to copy static files
-COPY --from=builder /app/.next/static ./.next/static
+# Copy Prisma schema for migrations
+COPY --from=builder /app/prisma ./prisma
+
+# Create uploads directory with proper permissions
+RUN mkdir -p /app/public/uploads
+RUN chown -R nextjs:nodejs /app/public/uploads
+RUN chmod -R 755 /app/public/uploads
+
+# Set proper ownership for the app directory
+RUN chown -R nextjs:nodejs /app
+USER nextjs
 
 EXPOSE 3009
 
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3007/api/health || exit 1
-
-CMD ["npm", "start"]
+# Run Prisma migrations and start the application
+CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
