@@ -1,5 +1,5 @@
 // /api/auth/register/route.js
-import { PrismaClient, Role } from "@prisma/client"; // <-- IMPORTANT: Import the Role enum
+import { PrismaClient, Role } from "@prisma/client";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
@@ -8,8 +8,26 @@ const prisma = new PrismaClient();
 
 export async function POST(request) {
   try {
-    const body = await request.json();
-    const { name, email, password } = body;
+    let name, email, password;
+    const contentType = request.headers.get("content-type") || "";
+
+    // Check content type and parse body accordingly
+    if (contentType.includes("application/json")) {
+      const body = await request.json();
+      name = body.name;
+      email = body.email;
+      password = body.password;
+    } else if (contentType.includes("application/x-www-form-urlencoded")) {
+      const formData = await request.formData();
+      name = formData.get('name');
+      email = formData.get('email');
+      password = formData.get('password');
+    } else {
+      return NextResponse.json(
+        { error: "Unsupported Content-Type" },
+        { status: 415 }
+      );
+    }
 
     // 1. Validate input
     if (!name || !email || !password) {
@@ -19,7 +37,6 @@ export async function POST(request) {
       );
     }
 
-    // You can add more specific validation here if you like (e.g., password length)
     if (password.length < 8) {
       return NextResponse.json(
         { error: "Password must be at least 8 characters long." },
@@ -36,7 +53,7 @@ export async function POST(request) {
       return NextResponse.json(
         { error: "A designer with this email already exists." },
         { status: 409 }
-      ); // 409 Conflict
+      );
     }
 
     // 3. Hash the password for security
@@ -48,7 +65,7 @@ export async function POST(request) {
         name,
         email,
         hashedPassword,
-        role: Role.DESIGNER, // <-- THIS IS THE KEY CHANGE
+        role: Role.DESIGNER,
       },
     });
 
@@ -64,13 +81,11 @@ export async function POST(request) {
       },
     });
 
-    // We don't want to return the hashed password to the client
     const { hashedPassword: _, ...userWithoutPassword } = user;
 
     return NextResponse.json(userWithoutPassword, { status: 201 });
   } catch (error) {
     console.error("Registration Error:", error);
-    // Handle potential database errors, like unique constraint violations if the check somehow fails
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2002") {
         return NextResponse.json(
