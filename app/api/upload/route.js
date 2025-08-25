@@ -1,12 +1,24 @@
 // app/api/upload/route.js
 
 import { NextResponse } from "next/server";
-import { writeFile, chmod } from "fs/promises";
-import { join } from "path";
 import { getCurrentUser } from "@/lib/session";
 import { PrismaClient } from "@prisma/client";
+import S3 from "aws-sdk/clients/s3";
+import dotenv from 'dotenv';
+import path from 'path';
+
+dotenv.config({ path: path.join(process.cwd(), '.env.local') });
+
 
 const prisma = new PrismaClient();
+
+// Configure AWS S3 client for Backblaze B2
+const s3 = new S3({
+  endpoint: `https://s3.${process.env.B2_BUCKET_REGION}.backblazeb2.com`,
+  accessKeyId: process.env.B2_APPLICATION_KEY_ID,
+  secretAccessKey: process.env.B2_APPLICATION_KEY,
+  signatureVersion: "v4",
+});
 
 // Helper to get IP and OS from request
 const getClientInfo = (request) => {
@@ -42,12 +54,18 @@ export async function POST(request) {
 
     // Create a unique filename
     const filename = `${Date.now()}-${file.name}`;
-    const path = join(process.cwd(), "public/uploads", filename);
 
-    await writeFile(path, buffer);
+    // Upload to Backblaze B2
+    const params = {
+      Bucket: process.env.B2_BUCKET_NAME,
+      Key: filename,
+      Body: buffer,
+      ContentType: file.type,
+    };
 
-    // Set correct permissions (755 = rwxr-xr-x)
-    await chmod(path, 0o755);
+    await s3.upload(params).promise();
+
+    const fileUrl = `${process.env.B2_BUCKET_URL}/${filename}`;
 
     const { ipAddress, os } = getClientInfo(request);
     await prisma.log.create({
@@ -58,14 +76,14 @@ export async function POST(request) {
         os,
         details: {
           filename: file.name,
-          filePath: `/uploads/${filename}`,
+          filePath: fileUrl,
         },
       },
     });
 
     return NextResponse.json({
       success: true,
-      path: `/uploads/${filename}`,
+      path: fileUrl,
     });
   } catch (error) {
     console.error("Error uploading file:", error);
