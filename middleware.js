@@ -115,7 +115,7 @@ export async function middleware(req) {
 
 
   // Redirect to login if no session
-  const loginUrl = new URL("/login", req.url);
+  const loginUrl = new URL("/", req.url);
   loginUrl.searchParams.set("callbackUrl", req.nextUrl.href);
   return NextResponse.redirect(loginUrl);
 }

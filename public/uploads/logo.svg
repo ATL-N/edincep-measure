@@ -1,0 +1,42 @@
+<svg width="1024" height="1024" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- 
+  Author: Gemini AI
+  Description: A more accurate, hand-coded recreation of the MeasureMate logo.
+  -->
+
+  <!-- 1. The teal squircle background -->
+  <rect width="100" height="100" rx="20" ry="20" fill="#26A69A"/>
+
+  <!-- 2. The entire white tape measure, drawn as a single, complex path -->
+  <g fill="white">
+    <path d="
+      M 29,51 
+      C 26,52 25,56 26,59 
+      A 48,48 0 0 0 75,72 
+      L 75,64 
+      A 40,40 0 0 1 32,54 
+      L 32,49 
+      A 25,12 0 1 1 68,49 
+      L 68,41 
+      A 33,20 0 1 0 29,41 
+      Z
+      M 50,34 
+      A 19,8 0 1 1 50,50 
+      A 19,8 0 1 1 50,34 
+      Z
+    "/>
+
+    <!-- 3. Tick marks, positioned and rotated to match the perspective -->
+    <!-- Ticks on the top roll -->
+    <rect x="49" y="24" width="2" height="6" />
+    <rect x="62" y="30" width="6" height="2" transform="rotate(20 65 31)" />
+    <rect x="30" y="30" width="6" height="2" transform="rotate(-20 32 31)" />
+    <rect x="67" y="40" width="6" height="2" />
+    <rect x="27" y="40" width="6" height="2" />
+
+    <!-- Ticks on the lower tape -->
+    <rect x="40" y="62" width="2" height="6" transform="rotate(-10 41 65)" />
+    <rect x="52" y="66" width="2" height="6" transform="rotate(-5 53 69)" />
+    <rect x="64" y="68" width="2" height="6" transform="rotate(0 65 71)" />
+  </g>
+</svg>

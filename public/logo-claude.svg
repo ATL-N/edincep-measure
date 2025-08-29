@@ -1,0 +1,66 @@
+<svg width="200" height="240" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background rounded rectangle -->
+  <rect x="0" y="0" width="200" height="200" rx="45" ry="45" fill="#4ECDC4"/>
+  
+  <!-- Database/cylinder icons -->
+  <!-- Top cylinder -->
+  <g transform="translate(100, 65)">
+    <!-- Top ellipse -->
+    <ellipse cx="0" cy="-15" rx="35" ry="12" fill="white"/>
+    <!-- Cylinder body -->
+    <rect x="-35" y="-15" width="70" height="30" fill="white"/>
+    <!-- Bottom ellipse -->
+    <ellipse cx="0" cy="15" rx="35" ry="12" fill="white"/>
+    <!-- Inner hole -->
+    <ellipse cx="0" cy="-15" rx="12" ry="5" fill="#4ECDC4"/>
+    <rect x="-12" y="-15" width="24" height="30" fill="#4ECDC4"/>
+    <ellipse cx="0" cy="15" rx="12" ry="5" fill="#4ECDC4"/>
+    
+    <!-- Measurement marks on the sides -->
+    <g stroke="white" stroke-width="2" fill="none">
+      <!-- Left side marks -->
+      <line x1="-35" y1="-8" x2="-28" y2="-8"/>
+      <line x1="-35" y1="-2" x2="-30" y2="-2"/>
+      <line x1="-35" y1="4" x2="-28" y2="4"/>
+      <line x1="-35" y1="10" x2="-30" y2="10"/>
+      
+      <!-- Right side marks -->
+      <line x1="35" y1="-8" x2="28" y2="-8"/>
+      <line x1="35" y1="-2" x2="30" y2="-2"/>
+      <line x1="35" y1="4" x2="28" y2="4"/>
+      <line x1="35" y1="10" x2="30" y2="10"/>
+    </g>
+  </g>
+  
+  <!-- Bottom cylinder -->
+  <g transform="translate(100, 135)">
+    <!-- Top ellipse -->
+    <ellipse cx="0" cy="-15" rx="35" ry="12" fill="white"/>
+    <!-- Cylinder body -->
+    <rect x="-35" y="-15" width="70" height="30" fill="white"/>
+    <!-- Bottom ellipse -->
+    <ellipse cx="0" cy="15" rx="35" ry="12" fill="white"/>
+    <!-- Inner hole -->
+    <ellipse cx="0" cy="-15" rx="12" ry="5" fill="#4ECDC4"/>
+    <rect x="-12" y="-15" width="24" height="30" fill="#4ECDC4"/>
+    <ellipse cx="0" cy="15" rx="12" ry="5" fill="#4ECDC4"/>
+    
+    <!-- Measurement marks on the sides -->
+    <g stroke="white" stroke-width="2" fill="none">
+      <!-- Left side marks -->
+      <line x1="-35" y1="-8" x2="-28" y2="-8"/>
+      <line x1="-35" y1="-2" x2="-30" y2="-2"/>
+      <line x1="-35" y1="4" x2="-28" y2="4"/>
+      <line x1="-35" y1="10" x2="-30" y2="10"/>
+      
+      <!-- Right side marks -->
+      <line x1="35" y1="-8" x2="28" y2="-8"/>
+      <line x1="35" y1="-2" x2="30" y2="-2"/>
+      <line x1="35" y1="4" x2="28" y2="4"/>
+      <line x1="35" y1="10" x2="30" y2="10"/>
+    </g>
+  </g>
+  
+  <!-- Text -->
+  <text x="100" y="230" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#333">MeasureMate</text>
+</svg>

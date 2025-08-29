@@ -9,6 +9,8 @@ import {
   AtSymbolIcon,
   LockClosedIcon,
   ExclamationTriangleIcon,
+  EyeIcon,
+  EyeSlashIcon,
 } from "@heroicons/react/24/outline";
 
 // A simple Google icon component
@@ -37,6 +39,7 @@ export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -181,13 +184,20 @@ export default function SignupPage() {
                 <LockClosedIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={8}
-                  className="w-full pl-10 pr-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring"
+                  className="w-full pl-10 pr-10 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground"
+                >
+                  {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
+                </button>
               </div>
             </div>
             {error && (

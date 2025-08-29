@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Background Rounded Square -->
+  <rect width="512" height="512" rx="100" fill="#20c997"/>
+
+  <!-- Tape Measure Icon -->
+  <g transform="translate(120,100)" fill="#fff">
+    <!-- Top roll -->
+    <ellipse cx="136" cy="60" rx="80" ry="50"/>
+    <ellipse cx="136" cy="60" rx="30" ry="20" fill="#20c997"/>
+    <!-- Bottom roll -->
+    <path d="M56 120c0 30 40 50 80 50s80-20 80-50v60c0 30-40 50-80 50s-80-20-80-50v-60z"/>
+    <!-- Measurement marks -->
+    <rect x="80" y="130" width="8" height="25" rx="2" ry="2"/>
+    <rect x="110" y="140" width="8" height="25" rx="2" ry="2"/>
+    <rect x="140" y="130" width="8" height="25" rx="2" ry="2"/>
+    <rect x="170" y="140" width="8" height="25" rx="2" ry="2"/>
+  </g>
+
+  <!-- Text -->
+  <text x="50%" y="480" text-anchor="middle" font-family="Arial, Helvetica, sans-serif"
+        font-size="56" font-weight="600" fill="#111">
+    edin-measure
+  </text>
+</svg>

@@ -20,6 +20,7 @@ import {
 import { ThemeProvider } from "./components/ThemeProvider";
 import { FloatingCursor } from "./components/FloatingCursor";
 import { Navigation } from "./components/Navigation";
+import ConfirmationModal from "./components/ConfirmationModal";
 
 const features = [
   {
@@ -61,7 +62,7 @@ const features = [
     icon: GlobeAltIcon,
     title: "Multi-Designer Support",
     description:
-      "Collaborate with multiple designers and share client access seamlessly.",
+      "Collaborate with multiple designers and share client measument easily as a pdf.",
     color: "from-teal-500 to-blue-500",
   },
 ];
@@ -171,6 +172,7 @@ const floatingVariants = {
 
 export default function LandingPage() {
   const [activeSection, setActiveSection] = useState("home");
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const { data: session, status } = useSession();
 
   useEffect(() => {
@@ -193,6 +195,20 @@ export default function LandingPage() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  const handleDownloadClick = () => {
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+  };
+
+  const handleConfirmDownload = () => {
+    window.location.href =
+      "https://f003.backblazeb2.com/file/measure-mate-pictures/edin-measure-v1.apk";
+    setIsModalOpen(false);
+  };
 
   return (
     <>
@@ -225,9 +241,12 @@ export default function LandingPage() {
               </h1>
               <p className="text-xl sm:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto">
                 Revolutionary measurement platform for fashion designers. Create
-                custom clothing with precision using our advanced 3-point
-                measurement system.
+                custom clothing with precision using our advanced measurement system .
+                You can download the android app below.
               </p>
+              <div className="mb-8">
+                <p className="text-2xl font-bold text-green-500">The system is currently free to use!</p>
+              </div>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 {status === "unauthenticated" && (
                   <Link
@@ -246,6 +265,12 @@ export default function LandingPage() {
                     Sign In
                   </Link>
                 )}
+                <button
+                  onClick={handleDownloadClick}
+                  className="inline-flex items-center px-8 py-4 text-lg font-semibold text-white bg-green-500 rounded-2xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
+                >
+                  Download Edin-Measure APK
+                </button>
               </div>
             </motion.div>
 
@@ -326,7 +351,7 @@ export default function LandingPage() {
         </motion.section>
 
         {/* Testimonials Section */}
-        <motion.section
+        {/* <motion.section
           id="testimonials"
           className="py-20 px-4 sm:px-6 lg:px-8 bg-muted/20"
           variants={containerVariants}
@@ -378,10 +403,10 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
-        </motion.section>
+        </motion.section> */}
 
         {/* Pricing Section */}
-        <motion.section
+        {/* <motion.section
           id="pricing"
           className="py-20 px-4 sm:px-6 lg:px-8"
           variants={containerVariants}
@@ -459,7 +484,7 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
-        </motion.section>
+        </motion.section> */}
 
         {/* CTA Section */}
         <motion.section
@@ -506,13 +531,13 @@ export default function LandingPage() {
               <div className="flex items-center justify-center mb-4">
                 <ScissorsIcon className="w-8 h-8 text-primary mr-2" />
                 <span className="text-2xl font-bold gradient-text">
-                  FashionFit
+                  EdinMeasure
                 </span>
               </div>
               <p className="text-muted-foreground mb-4">
                 Precision measurement platform for fashion professionals
               </p>
-              <div className="flex justify-center space-x-6 text-sm text-muted-foreground">
+              {/* <div className="flex justify-center space-x-6 text-sm text-muted-foreground">
                 <Link
                   href="/privacy"
                   className="hover:text-primary transition-colors"
@@ -531,14 +556,19 @@ export default function LandingPage() {
                 >
                   Contact Us
                 </Link>
-              </div>
+              </div> */}
               <p className="text-sm text-muted-foreground mt-8">
-                © 2025 FashionFit. All rights reserved.
+                © 2025 EdinMeasure. All rights reserved.
               </p>
             </div>
           </div>
         </footer>
       </ThemeProvider>
+    <ConfirmationModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onConfirm={handleConfirmDownload}
+      />
     </>
   );
 }

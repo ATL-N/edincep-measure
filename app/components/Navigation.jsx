@@ -53,6 +53,12 @@ const getNavigation = (role) => {
           icon: DocumentTextIcon,
           iconSolid: DocumentTextIconSolid,
         },
+        {
+          name: "Free",
+          href: "#pricing",
+          icon: ChartBarIcon,
+          iconSolid: ChartBarIconSolid,
+        },
       ];
     case "DESIGNER":
       return [
@@ -80,6 +86,12 @@ const getNavigation = (role) => {
           icon: CogIcon,
           iconSolid: CogIconSolid,
         },
+        {
+          name: "Free",
+          href: "#pricing",
+          icon: ChartBarIcon,
+          iconSolid: ChartBarIconSolid,
+        },
       ];
     case "CLIENT":
       return [
@@ -100,6 +112,12 @@ const getNavigation = (role) => {
           href: "/client/measurements",
           icon: DocumentTextIcon,
           iconSolid: DocumentTextIconSolid,
+        },
+        {
+          name: "Free",
+          href: "#pricing",
+          icon: ChartBarIcon,
+          iconSolid: ChartBarIconSolid,
         },
       ];
     default:
@@ -145,6 +163,13 @@ const getMobileNavigation = (role) => {
           icon: CogIcon,
           iconSolid: CogIconSolid,
           label: "Settings",
+        },
+        {
+          name: "Free",
+          href: "#pricing",
+          icon: ChartBarIcon,
+          iconSolid: ChartBarIconSolid,
+          label: "Free",
         },
         {
           name: "Sign Out",
@@ -193,6 +218,13 @@ const getMobileNavigation = (role) => {
           label: "Settings",
         },
         {
+          name: "Free",
+          href: "#pricing",
+          icon: ChartBarIcon,
+          iconSolid: ChartBarIconSolid,
+          label: "Free",
+        },
+        {
           name: "Sign Out",
           href: "#",
           icon: LogOutIcon,
@@ -223,6 +255,13 @@ const getMobileNavigation = (role) => {
           icon: DocumentTextIcon,
           iconSolid: DocumentTextIconSolid,
           label: "History",
+        },
+        {
+          name: "Free",
+          href: "#pricing",
+          icon: ChartBarIcon,
+          iconSolid: ChartBarIconSolid,
+          label: "Free",
         },
         {
           name: "Sign Out",
@@ -262,7 +301,7 @@ export function Navigation() {
             <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center animate-pulse-glow">
               <span className="text-white font-bold text-sm">E</span>
             </div>
-            <span className="font-bold gradient-text text-lg">Edinception</span>
+            <span className="font-bold gradient-text text-lg">EdinMeasure</span>
           </Link>
 
           <div className="flex items-center space-x-4">
@@ -328,7 +367,7 @@ export function Navigation() {
             <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center animate-pulse-glow">
               <span className="text-white font-bold text-sm">E</span>
             </div>
-            <span className="font-bold gradient-text">Edinception</span>
+            <span className="font-bold gradient-text">EdinMeasure</span>
           </Link>
 
           <button
