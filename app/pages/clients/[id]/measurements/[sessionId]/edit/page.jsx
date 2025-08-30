@@ -256,7 +256,7 @@ export default function MeasurementEditPage() {
       const body = {
         notes,
         ...storageMeasurements,
-        status: orderStatus,
+        orderStatus: orderStatus,
         completionDeadline,
         materialImageUrl: finalMaterialImageUrl,
         designImageUrl: finalDesignImageUrl,

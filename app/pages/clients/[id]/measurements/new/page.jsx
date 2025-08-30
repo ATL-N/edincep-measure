@@ -263,7 +263,7 @@ export default function MeasurementFormPage() {
       const body = {
         notes,
         ...storageMeasurements,
-        status: orderStatus,
+        orderStatus: orderStatus,
         completionDeadline,
         materialImageUrl: finalMaterialImageUrl,
         designImageUrl: finalDesignImageUrl,

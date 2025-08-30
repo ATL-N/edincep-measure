@@ -252,7 +252,7 @@ export async function GET(request, { params }) {
         id: sessionData.id,
         createdAt: sessionData.createdAt,
         notes: sessionData.notes,
-        status: sessionData.status,
+        orderStatus: sessionData.orderStatus,
         completionDeadline: sessionData.completionDeadline,
         materialImageUrl: sessionData.materialImageUrl,
         designImageUrl: sessionData.designImageUrl,
@@ -366,7 +366,7 @@ export async function PUT(request, { params }) {
     }
 
     // 4. Prepare the data for update
-    const { notes, status, completionDeadline, materialImageUrl, designImageUrl, ...measurements } = body;
+    const { notes, orderStatus, completionDeadline, materialImageUrl, designImageUrl, ...measurements } = body;
 
     // Convert numeric measurement values from string to float
     const measurementData = {};
@@ -380,12 +380,14 @@ export async function PUT(request, { params }) {
         if (!isNaN(parsedValue)) {
           measurementData[key] = parsedValue;
         }
+      } else {
+        measurementData[key] = null;
       }
     }
 
     const updateData = {
       notes,
-      status,
+      orderStatus,
       completionDeadline: completionDeadline ? new Date(completionDeadline) : null,
       materialImageUrl,
       designImageUrl,
