@@ -206,7 +206,7 @@ export default function LandingPage() {
 
   const handleConfirmDownload = () => {
     window.location.href =
-      "https://f003.backblazeb2.com/file/measure-mate-pictures/edin-measure-v1.apk";
+      "https://f003.backblazeb2.com/file/measure-mate-pictures/edin-measure-v4.apk";
     setIsModalOpen(false);
   };
 
