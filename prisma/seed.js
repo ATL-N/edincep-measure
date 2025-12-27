@@ -7,10 +7,10 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("🌱 Deleting existing data...");
   // Delete in reverse order of creation to avoid foreign key constraints
-  await prisma.measurement.deleteMany({});
-  await prisma.clientDesigner.deleteMany({});
-  await prisma.client.deleteMany({});
-  await prisma.user.deleteMany({});
+  // await prisma.measurement.deleteMany({});
+  // await prisma.clientDesigner.deleteMany({});
+  // await prisma.client.deleteMany({});
+  // await prisma.user.deleteMany({});
 
   console.log("🌱 Seeding database...");
 

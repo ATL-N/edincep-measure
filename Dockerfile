@@ -1,60 +1,56 @@
+# Stage 1: Build the application
 FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Install PostgreSQL client and other dependencies
+# Install build-time dependencies
 RUN apk update && \
-    apk add --no-cache postgresql-client curl
+    apk add --no-cache libc6-compat openssl
 
-# Install dependencies
+# Copy package files and install all dependencies
 COPY package*.json ./
 RUN npm ci
 
-# Copy source code
+# Copy the rest of the application code
 COPY . .
 
 # Generate Prisma client
 RUN npx prisma generate
 
-# Build the Next.js application
+# Build the Next.js application (with standalone output)
 RUN npm run build
 
-# Production image
+
+# Stage 2: Production image
 FROM node:18-alpine AS runner
 
 WORKDIR /app
 
-ENV NODE_ENV production
+ENV NODE_ENV=production
 
-# Install PostgreSQL client for production image
+# Install production-only OS dependencies
 RUN apk update && \
-    apk add --no-cache postgresql-client curl
+    apk add --no-cache postgresql-client dumb-init && \
+    rm -rf /var/cache/apk/*
 
-# Create a non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs --ingroup nodejs
-
-
-# Copy necessary files from builder
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/next.config.js ./
+# Copy necessary files from the builder stage based on standalone output
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
 
-# Copy Prisma schema for migrations
+# Prisma needs its schema to run migrations in the entrypoint
 COPY --from=builder /app/prisma ./prisma
 
-# Create uploads directory with proper permissions
-RUN mkdir -p /app/public/uploads
-RUN chown -R nextjs:nodejs /app/public/uploads
-RUN chmod -R 755 /app/public/uploads
+# Copy and make the entrypoint script executable
+COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 
-# Set proper ownership for the entire app directory
-RUN chown -R nextjs:nodejs /app
-USER nextjs
-
+# Expose the port the app will run on
 EXPOSE 3009
 
-# Run Prisma migrations and start the application
-CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
+# Use dumb-init to handle signals properly and run the entrypoint
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "./entrypoint.sh"]
+
+# The command to start the app, which will be executed by the entrypoint
+CMD ["node", "server.js"]

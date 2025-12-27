@@ -5,8 +5,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "${APP_PORT:-3009}:3000"
+    # The port is exposed by the Dockerfile, and Traefik will handle mapping.
+    # ports:
+    #  - "${APP_PORT:-3009}:3009"
     env_file:
      - .env
     environment:
@@ -14,72 +15,36 @@ services:
       - NEXTAUTH_URL=https://${DOMAIN}
       - NODE_ENV=production
       - DB_HOST=${DB_HOST}
-      - PORT=3009
+      - PORT=3009 # The port the app listens on inside the container
     volumes:
       - uploads-data:/app/public/uploads
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.measuremate-http.rule=Host(`${DOMAIN}`)
-      - traefik.http.routers.measuremate-http.entrypoints=http
-      - traefik.http.routers.measuremate-http.middlewares=https-redirect
-      - traefik.http.routers.measuremate-https.rule=Host(`${DOMAIN}`)
-      - traefik.http.routers.measuremate-https.entrypoints=https
-      - traefik.http.routers.measuremate-https.tls=true
-      - traefik.http.routers.measuremate-https.tls.certresolver=le
-      - traefik.http.routers.measuremate-https.service=measuremate-service
-      - traefik.http.services.measuremate-service.loadbalancer.server.port=3009
+      - "traefik.enable=true"
+      - "traefik.http.routers.measuremate-http.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.measuremate-http.entrypoints=http"
+      - "traefik.http.routers.measuremate-http.middlewares=https-redirect@docker"
+      - "traefik.http.routers.measuremate-https.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.measuremate-https.entrypoints=https"
+      - "traefik.http.routers.measuremate-https.tls=true"
+      - "traefik.http.routers.measuremate-https.tls.certresolver=le"
+      - "traefik.http.routers.measuremate-https.service=measuremate-service"
+      - "traefik.http.services.measuremate-service.loadbalancer.server.port=3009"
     depends_on:
       measurematehost:
         condition: service_healthy
-      prisma-migrate:
-        condition: service_completed_successfully
     restart: always
     networks:
       - traefik-public
     healthcheck:
+      # This healthcheck targets the port exposed inside the container
       test: ["CMD", "wget", "--spider", "http://localhost:3009/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # Prisma migration and seeding service
-  prisma-migrate:
-    image: measure-mate-nextjs:${VERSION:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-    env_file:
-     - .env
-    environment:
-      - NODE_ENV=production
-      - DB_HOST=${DB_HOST}
-    depends_on:
-      measurematehost:
-        condition: service_healthy
-    command: >
-      sh -c "
-        echo 'Checking for existing migrations...' &&
-        if [ ! -d 'prisma/migrations' ] || [ -z \"$(ls -A prisma/migrations 2>/dev/null)\" ]; then
-          echo 'No migrations found. Creating initial migration...' &&
-          npx prisma migrate dev --name init --skip-seed;
-        else
-          echo 'Migrations found. Deploying...' &&
-          npx prisma migrate deploy;
-        fi &&
-        echo 'Generating Prisma client...' &&
-        npx prisma generate &&
-        echo 'Running seed...' &&
-        # npx prisma db seed &&
-        echo 'Database initialization completed!'
-      "
-    networks:
-      - traefik-public
-    restart: "no"
-
   measurematehost:
     image: postgres:15-alpine
-    
     ports:
       - "5441:5432"
     environment:
