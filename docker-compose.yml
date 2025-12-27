@@ -1,68 +1,83 @@
-# version: '3.8'
 services:
-  nextjs:
+  measuremate-app:
     image: measure-mate-nextjs:${VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
-    # The port is exposed by the Dockerfile, and Traefik will handle mapping.
-    # ports:
-    #  - "${APP_PORT:-3009}:3009"
     env_file:
-     - .env
+      - .env
     environment:
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - DOMAIN=${DOMAIN:-measuremate.edinception.online}
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@measuremate-db:5432/${DB_NAME:-measuremate}
       - NEXTAUTH_URL=https://${DOMAIN}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - NODE_ENV=production
-      - DB_HOST=${DB_HOST}
-      - PORT=3009 # The port the app listens on inside the container
+      - HOSTNAME=0.0.0.0
+      - PORT=3009
+    depends_on:
+      measuremate-db:
+        condition: service_healthy
+    restart: always
+    networks:
+      - traefik-public
     volumes:
       - uploads-data:/app/public/uploads
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: '2G'
+        reservations:
+          cpus: '0.1'
+          memory: '512M'
     labels:
       - "traefik.enable=true"
+      # HTTP Router
       - "traefik.http.routers.measuremate-http.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.measuremate-http.entrypoints=http"
       - "traefik.http.routers.measuremate-http.middlewares=https-redirect@docker"
+      # HTTPS Router
       - "traefik.http.routers.measuremate-https.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.measuremate-https.entrypoints=https"
       - "traefik.http.routers.measuremate-https.tls=true"
       - "traefik.http.routers.measuremate-https.tls.certresolver=le"
       - "traefik.http.routers.measuremate-https.service=measuremate-service"
+      # Service
       - "traefik.http.services.measuremate-service.loadbalancer.server.port=3009"
-    depends_on:
-      measurematehost:
-        condition: service_healthy
-    restart: always
-    networks:
-      - traefik-public
     healthcheck:
-      # This healthcheck targets the port exposed inside the container
       test: ["CMD", "wget", "--spider", "http://localhost:3009/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  measurematehost:
+  measuremate-db:
     image: postgres:15-alpine
-    ports:
-      - "5441:5432"
     environment:
       - POSTGRES_USER=${DB_USER:-postgres}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=${DB_NAME:-postgres}
-      - DB_HOST=${DB_HOST}
+      - POSTGRES_DB=${DB_NAME:-measuremate}
     volumes:
       - postgres-data-measure-mate:/var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d
       - ./backups:/app/backups
+    ports:
+      - "5441:5432"
+    networks:
+      - traefik-public
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-postgres}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-measuremate}"]
       interval: 5s
       timeout: 5s
       retries: 5
-    networks:
-      - traefik-public
     command:
       - "postgres"
       - "-c"
