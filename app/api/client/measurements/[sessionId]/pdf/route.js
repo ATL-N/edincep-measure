@@ -8,7 +8,7 @@ import { jsPDF } from "jspdf";
 const prisma = new PrismaClient();
 
 export async function GET(request, { params }) {
-  const { sessionId } = params;
+  const { sessionId } = await params;
   const user = await getCurrentUser(request);
 
   if (!user || user.role !== "CLIENT") {

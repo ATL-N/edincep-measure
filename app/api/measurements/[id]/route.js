@@ -15,7 +15,8 @@ const getClientInfo = (request) => {
 // GET single measurement
 export async function GET(request, { params }) {
   try {
-    const { id } = params;
+    const awaitedparam = await params;
+    const { id } = awaitedparam;
 
     const measurement = await prisma.measurement.findUnique({
       where: { id },
@@ -58,7 +59,8 @@ export async function PUT(request, { params }) {
     }
 
     // 2. Get ID and body
-    const { id } = params;
+    const awaitedparam = await params;
+    const { id } = awaitedparam;
     const body = await request.json();
 
     // 3. Sanitize incoming data
@@ -153,7 +155,8 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
+    const awaitedparam = await params;
+    const { id } = awaitedparam;
 
     const deletedMeasurement = await prisma.measurement.delete({
       where: { id },

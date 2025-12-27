@@ -8,7 +8,8 @@ import autoTable from 'jspdf-autotable';
 const prisma = new PrismaClient();
 
 export async function GET(request, { params }) {
-  const { id } = params;
+  const awaitedparam = await params;
+      const { id } = awaitedparam;;
   const user = await getCurrentUser(request);
 
   if (!user) {
