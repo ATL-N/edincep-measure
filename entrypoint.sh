@@ -33,6 +33,6 @@ echo "Seeding database..."
 unset PGPASSWORD
 
 # 4. Start the Next.js application
-echo "Starting Next.js standalone server on port 3009..."
+echo "Starting Next.js standalone server on port 3000..."
 # The server is located in the root of the standalone output
 exec node server.js
