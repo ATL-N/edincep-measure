@@ -1,9 +1,7 @@
 // @/app/api/user/preferences/route.js
-import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/app/lib/prisma.js";
 
 /**
  * GET handler to fetch the current user's preferences.

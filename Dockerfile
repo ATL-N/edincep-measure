@@ -1,6 +1,11 @@
 # Stage 1: Build the application
 FROM node:20-alpine AS builder
 
+# Accept the database URL as a build argument
+ARG DATABASE_URL
+# Set it as an environment variable for the build process
+ENV DATABASE_URL=$DATABASE_URL
+
 WORKDIR /app
 
 # Install build-time dependencies

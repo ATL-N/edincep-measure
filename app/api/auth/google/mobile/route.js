@@ -1,11 +1,10 @@
 // /api/auth/google/mobile/route.js
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from "@/app/lib/prisma.js";
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 
-const prisma = new PrismaClient();
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 async function createLog(data) {

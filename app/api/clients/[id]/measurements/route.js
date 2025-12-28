@@ -1,10 +1,9 @@
 // app/api/clients/[id]/measurements/route.js
 
-import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session"; // Ensure this path points to your auth helper
-
-const prisma = new PrismaClient();
+import { prisma } from "@/app/lib/prisma.js";
+import { RecordStatus } from "@prisma/client";
 
 // Helper function to count non-null measurement fields in a session
 const countFilledMeasurements = (measurement) => {

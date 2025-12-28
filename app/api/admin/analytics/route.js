@@ -1,9 +1,10 @@
 // @/app/api/admin/analytics/route.js
 import { NextResponse } from "next/server";
-import { PrismaClient, Role } from "@prisma/client";
+import { prisma } from "@/app/lib/prisma.js";
 import { getCurrentUser } from "@/lib/session";
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient(); // Removed local instance
+
 
 export async function GET(request) {
   try {

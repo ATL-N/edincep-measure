@@ -1,11 +1,11 @@
 
 // @/app/api/client/measurements/[sessionId]/pdf/route.js
-import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { jsPDF } from "jspdf";
+import { prisma } from "@/app/lib/prisma.js";
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient(); // Replaced with shared client
 
 export async function GET(request, { params }) {
   const { sessionId } = await params;

@@ -1,10 +1,10 @@
 // app/api/admin/users/[id]/route.js
 
-import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
+import { prisma } from "@/app/lib/prisma.js";
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient(); // Replaced with shared client
 
 // Helper to get IP and OS from request
 const getClientInfo = (request) => {

@@ -1,10 +1,10 @@
 // app/api/admin/users/route.js
 
-import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
+import { prisma } from "@/app/lib/prisma.js";
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient(); // Replaced with shared client
 
 // GET all users (ADMIN only)
 export async function GET(request) {

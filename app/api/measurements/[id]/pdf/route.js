@@ -1,11 +1,9 @@
 // @/app/api/measurements/[id]/pdf/route.js
-import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
-
-const prisma = new PrismaClient();
+import { prisma } from "@/app/lib/prisma.js";
 
 export async function GET(request, { params }) {
   const awaitedparam = await params;

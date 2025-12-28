@@ -1,9 +1,7 @@
 // app/api/clients/[id]/route.js
-import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/app/lib/prisma.js";
 
 // Helper function to count non-null measurement fields in a session
 const countFilledMeasurements = (measurement) => {

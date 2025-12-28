@@ -2,12 +2,11 @@
 
 import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import { PrismaClient, Role } from "@prisma/client";
+import { prisma } from "@/app/lib/prisma.js";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-
-const prisma = new PrismaClient();
+import { Role } from "@prisma/client";
 
 // A helper function to create logs to keep the authorize function clean
 async function createLog(data) {

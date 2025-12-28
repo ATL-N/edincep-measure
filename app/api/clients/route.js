@@ -1,10 +1,9 @@
 // /api/clients/route.js
 
-import { PrismaClient, RecordStatus } from "@prisma/client";
+import { RecordStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/app/lib/prisma.js";
 
 // Helper to get IP and OS from request
 const getClientInfo = (request) => {

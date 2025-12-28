@@ -1,8 +1,8 @@
 // @/app/api/admin/logs/route.js
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/app/lib/prisma.js";
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient(); // Replaced with shared client
 
 export async function GET(request) {
   try {

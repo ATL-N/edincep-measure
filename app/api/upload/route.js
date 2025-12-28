@@ -2,15 +2,12 @@
 
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/app/lib/prisma.js";
 import S3 from "aws-sdk/clients/s3";
 import dotenv from 'dotenv';
 import path from 'path';
 
 dotenv.config({ path: path.join(process.cwd(), '.env.local') });
-
-
-const prisma = new PrismaClient();
 
 // Configure AWS S3 client for Backblaze B2
 const s3 = new S3({
