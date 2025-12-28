@@ -41,6 +41,11 @@ COPY --from=builder /app/public ./public
 # Prisma needs its schema to run migrations in the entrypoint
 COPY --from=builder /app/prisma ./prisma
 
+# Manually copy Prisma CLI and its dependencies
+COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
 # Copy and make the entrypoint script executable
 COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
