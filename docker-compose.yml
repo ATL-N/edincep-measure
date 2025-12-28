@@ -37,7 +37,7 @@ services:
       # HTTP Router
       - "traefik.http.routers.measuremate-http.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.measuremate-http.entrypoints=http"
-      - "traefik.http.routers.measuremate-http.middlewares=https-redirect@docker"
+      - "traefik.http.routers.measuremate-http.middlewares=https-redirect"
       # HTTPS Router
       - "traefik.http.routers.measuremate-https.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.measuremate-https.entrypoints=https"
