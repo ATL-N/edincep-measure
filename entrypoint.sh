@@ -24,10 +24,15 @@ echo "Database is ready."
 echo "Running database migrations..."
 npx prisma migrate deploy
 
+# 3. Seed the database if needed
+echo "Seeding database..."
+# The seed script should be idempotent, so it's safe to run every time.
+npx prisma db seed
+
 # Unset the password variable for security
 unset PGPASSWORD
 
-# 3. Start the Next.js application
+# 4. Start the Next.js application
 echo "Starting Next.js standalone server on port 3009..."
 # The server is located in the root of the standalone output
 exec node server.js
