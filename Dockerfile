@@ -45,6 +45,7 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/@prisma/engines/prisma_schema_build_bg.wasm ./node_modules/.bin/
 
 # Copy and make the entrypoint script executable
 COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
