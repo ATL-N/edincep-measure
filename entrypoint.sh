@@ -22,12 +22,12 @@ echo "Database is ready."
 
 # 2. Run database migrations
 echo "Running database migrations..."
-npx prisma migrate deploy
+./node_modules/.bin/prisma migrate deploy
 
 # 3. Seed the database if needed
 echo "Seeding database..."
 # The seed script should be idempotent, so it's safe to run every time.
-npx prisma db seed
+./node_modules/.bin/prisma db seed
 
 # Unset the password variable for security
 unset PGPASSWORD
