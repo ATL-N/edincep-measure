@@ -43,6 +43,8 @@ model User {
   role           Role      @default(CLIENT)
   status         UserStatus @default(ACTIVE)
   hashedPassword String?
+  passwordResetToken String?
+  passwordResetTokenExpires DateTime?
   measurementUnit MeasurementUnit @default(INCH) // --- NEW: Add user preference ---
 
   // --- Auth.js relations ---

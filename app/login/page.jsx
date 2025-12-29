@@ -155,6 +155,11 @@ export default function LoginPage() {
                   {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
                 </button>
               </div>
+              <div className="flex justify-end text-sm mt-1">
+                <Link href="/login/forgot-password" className="text-primary hover:underline">
+                  Forgot your password?
+                </Link>
+              </div>
             </div>
             {error && (
               <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg flex items-center gap-2">

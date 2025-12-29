@@ -22,7 +22,7 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     const { role, status } = await request.json();
 
     const existingUser = await prisma.user.findUnique({ where: { id } });
