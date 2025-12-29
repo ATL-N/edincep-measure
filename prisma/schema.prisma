@@ -47,6 +47,7 @@ model User {
 
   // --- Auth.js relations ---
   accounts Account[]
+  sessions Session[]
   logs     Log[]
 
   // --- Application-specific relations ---
@@ -82,6 +83,14 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // Model for "magic link" email sign-ins.
