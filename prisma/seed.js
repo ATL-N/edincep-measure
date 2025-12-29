@@ -1,103 +1,105 @@
 // prisma/seed.js
 const { PrismaClient } = require("@prisma/client");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Deleting existing data...");
-  // Delete in reverse order of creation to avoid foreign key constraints
-  // await prisma.measurement.deleteMany({});
-  // await prisma.clientDesigner.deleteMany({});
-  // await prisma.client.deleteMany({});
-  // await prisma.user.deleteMany({});
-
   console.log("🌱 Seeding database...");
 
-  // Create a designer user and an admin user
-  const designer = await prisma.user.create({
-    data: {
+  const hashedPassword = await bcrypt.hash("password", 10);
+
+  // Upsert users (create if not exist)
+  const designer = await prisma.user.upsert({
+    where: { email: "patience@enyaah.com" },
+    update: {},
+    create: {
       name: "Pat Pat",
       email: "patience@enyaah.com",
       role: "DESIGNER",
-      hashedPassword: await bcrypt.hash("password", 10),
+      hashedPassword: hashedPassword,
     },
   });
 
-  const admin = await prisma.user.create({
-    data: {
+  const admin = await prisma.user.upsert({
+    where: { email: "admin@admin.com" },
+    update: {},
+    create: {
       name: "admin admin",
       email: "admin@admin.com",
       role: "ADMIN",
-      hashedPassword: await bcrypt.hash("password", 10),
+      hashedPassword: hashedPassword,
     },
   });
+  console.log("✅ Upserted users: designer and admin");
 
-  // Create sample clients
-  const clients = await Promise.all([
-    prisma.client.create({
-      data: {
-        name: "Sarah Johnson",
-        phone: "+1 (555) 123-4567",
-        email: "sarah.johnson@email.com",
-        address: "123 Fashion Ave, New York, NY 10001",
-        notes: "Prefers loose-fitting garments, allergic to wool",
-      },
-    }),
-    prisma.client.create({
-      data: {
-        name: "Maria Rodriguez",
-        phone: "+1 (555) 987-6543",
-        email: "maria.rodriguez@email.com",
-        address: "456 Style St, Los Angeles, CA 90210",
-        notes: "Regular client, loves bold colors and patterns",
-      },
-    }),
-    prisma.client.create({
-      data: {
-        name: "Emma Thompson",
-        phone: "+1 (555) 456-7890",
-        email: "emma.thompson@email.com",
-        address: "789 Couture Rd, Miami, FL 33101",
-        notes: "Business professional wardrobe, prefers classic styles",
-      },
-    }),
-    prisma.client.create({
-      data: {
-        name: "Aisha Patel",
-        phone: "+1 (555) 321-0987",
-        email: "aisha.patel@email.com",
-        address: "321 Designer Blvd, Chicago, IL 60601",
-        notes: "Bride-to-be, needs wedding dress and bridesmaid coordination",
-      },
-    }),
-    prisma.client.create({
-      data: {
-        name: "Jennifer Chen",
-        phone: "+1 (555) 654-3210",
-        email: "jennifer.chen@email.com",
-        address: "654 Trendy Lane, San Francisco, CA 94102",
-        notes: "Petite sizing, loves contemporary fashion",
-      },
-    }),
-  ]);
+  // Upsert clients
+  const clientData = [
+    {
+      name: "Sarah Johnson",
+      phone: "+1 (555) 123-4567",
+      email: "sarah.johnson@email.com",
+      address: "123 Fashion Ave, New York, NY 10001",
+      notes: "Prefers loose-fitting garments, allergic to wool",
+    },
+    {
+      name: "Maria Rodriguez",
+      phone: "+1 (555) 987-6543",
+      email: "maria.rodriguez@email.com",
+      address: "456 Style St, Los Angeles, CA 90210",
+      notes: "Regular client, loves bold colors and patterns",
+    },
+    {
+      name: "Emma Thompson",
+      phone: "+1 (555) 456-7890",
+      email: "emma.thompson@email.com",
+      address: "789 Couture Rd, Miami, FL 33101",
+      notes: "Business professional wardrobe, prefers classic styles",
+    },
+    {
+      name: "Aisha Patel",
+      phone: "+1 (555) 321-0987",
+      email: "aisha.patel@email.com",
+      address: "321 Designer Blvd, Chicago, IL 60601",
+      notes: "Bride-to-be, needs wedding dress and bridesmaid coordination",
+    },
+    {
+      name: "Jennifer Chen",
+      phone: "+1 (555) 654-3210",
+      email: "jennifer.chen@email.com",
+      address: "654 Trendy Lane, San Francisco, CA 94102",
+      notes: "Petite sizing, loves contemporary fashion",
+    },
+  ];
 
-  console.log("✅ Created clients:", clients.length);
+  const clients = await Promise.all(
+      clientData.map(c => prisma.client.upsert({
+          where: { email: c.email },
+          update: c,
+          create: c,
+      }))
+  );
+  console.log("✅ Upserted clients:", clients.length);
 
-  // Assign the first two clients to the designer
+
+  // Assign clients to designer, skipping duplicates
   await prisma.clientDesigner.createMany({
     data: [
       { clientId: clients[0].id, designerId: designer.id },
       { clientId: clients[1].id, designerId: designer.id },
     ],
+    skipDuplicates: true,
   });
-
   console.log("✅ Assigned clients to designer");
 
-  // Create sample measurements for each client
-  const measurements = [];
 
-  // Sarah Johnson's measurements - Complete set with all three types
+  // Only seed measurements if the table is empty
+  const measurementCount = await prisma.measurement.count();
+  if (measurementCount === 0) {
+    console.log("🌱 Seeding measurements...");
+    const measurements = [];
+    
+    // Sarah Johnson's measurements - Complete set with all three types
   measurements.push(
     await prisma.measurement.create({
       data: {
@@ -394,12 +396,13 @@ async function main() {
       },
     })
   );
-
-  console.log("✅ Created measurements:", measurements.length);
-
+    
+    console.log("✅ Created measurements:", measurements.length);
+  } else {
+    console.log("✅ Found existing measurements, skipping measurement seed.");
+  }
+  
   console.log("🎉 Seeding completed successfully!");
-  console.log(`📊 Total clients: ${clients.length}`);
-  console.log(`📏 Total measurements: ${measurements.length}`);
 }
 
 main()
