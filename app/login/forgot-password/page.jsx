@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -33,8 +32,6 @@ export default function ForgotPasswordPage() {
 
       if (response.ok) {
         setMessage(data.message || "If an account with that email exists, a password reset code has been sent.");
-        // Redirect to a page that tells the user to check their email
-        // or directly to the reset-password page with email pre-filled
         router.push(`/login/reset-password?email=${encodeURIComponent(email)}`);
       } else {
         setError(data.error || "An unexpected error occurred.");
@@ -48,19 +45,20 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-theme(spacing.16))] flex-col items-center justify-center py-10">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl text-center">Forgot Password</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-center text-sm text-muted-foreground mb-6">
-            Enter your email address and we'll send you a code to reset your password.
-          </p>
-          <form onSubmit={handleSubmit} className="grid gap-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold gradient-text">Forgot Password</h1>
+            <p className="text-muted-foreground mt-2">
+                No problem. We'll email you a reset code.
+            </p>
+        </div>
+
+        <div className="glass rounded-2xl p-8">
+            <form onSubmit={handleSubmit} className="grid gap-4">
             <div className="grid gap-2">
-              <label htmlFor="email">Email</label>
-              <Input
+                <label htmlFor="email" className="text-sm font-medium text-foreground">Email Address</label>
+                <Input
                 id="email"
                 type="email"
                 placeholder="m@example.com"
@@ -68,22 +66,24 @@ export default function ForgotPasswordPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading}
-              />
+                className="w-full pl-4 pr-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring"
+                />
             </div>
-            {message && <p className="text-green-500 text-sm text-center">{message}</p>}
-            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Sending..." : "Send Reset Code"}
+            {message && <p className="text-green-500 text-sm text-center bg-green-500/10 p-3 rounded-lg">{message}</p>}
+            {error && <p className="text-destructive text-sm text-center bg-destructive/10 p-3 rounded-lg">{error}</p>}
+            <Button type="submit" className="w-full gradient-bg text-primary-foreground font-semibold" disabled={loading}>
+                {loading ? "Sending..." : "Send Reset Code"}
             </Button>
-          </form>
-          <div className="mt-4 text-center text-sm">
+            </form>
+        </div>
+        
+        <p className="text-center text-sm text-muted-foreground mt-8">
             Remember your password?{" "}
-            <Link href="/login" className="underline">
+            <Link href="/login" className="font-semibold text-primary hover:underline">
               Sign In
             </Link>
-          </div>
-        </CardContent>
-      </Card>
+        </p>
+      </div>
     </div>
   );
 }

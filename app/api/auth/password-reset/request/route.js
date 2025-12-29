@@ -4,6 +4,7 @@ import { prisma } from "@/app/lib/prisma";
 import { Resend } from "resend";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { isRateLimited } from "@/app/lib/rate-limiter";
 
 // Initialize Resend with the API key from environment variables
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -11,7 +12,31 @@ const fromEmail = process.env.FROM_EMAIL || 'onboarding@resend.dev';
 
 
 export async function POST(req) {
+  // Get IP address for rate limiting
+  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || '127.0.0.1';
+  
+  const RATE_LIMIT_LIMIT = 3;
+  const RATE_LIMIT_WINDOW = 24 * 60 * 60; // 24 hours in seconds
+
   try {
+    const { isLimited, remaining, reset } = await isRateLimited(ip, RATE_LIMIT_LIMIT, RATE_LIMIT_WINDOW);
+    
+    if (isLimited) {
+      return new NextResponse(
+        JSON.stringify({
+          error: "Too many requests. Please try again later.",
+          retryAfter: Math.ceil((reset.getTime() - Date.now()) / 1000),
+        }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': Math.ceil((reset.getTime() - Date.now()) / 1000).toString(),
+          },
+        }
+      );
+    }
+    
     const { email } = await req.json();
 
     // 1. Find the user by email
@@ -19,9 +44,9 @@ export async function POST(req) {
       where: { email },
     });
 
-    // If no user is found, we send a generic success response
-    // to prevent user enumeration attacks.
-    if (!user) {
+    // If no user is found, or if the user is soft-deleted, we send a
+    // generic success response to prevent user enumeration attacks.
+    if (!user || user.status === 'DELETED') {
       return NextResponse.json(
         { message: "If an account with this email exists, a reset code has been sent." },
         { status: 200 }

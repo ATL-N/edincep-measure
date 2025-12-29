@@ -62,10 +62,10 @@ export const authOptions = {
           where: { email },
         });
 
-        // Case 1: User not found
-        if (!user || !user.hashedPassword) {
+        // Case 1: User not found or is soft-deleted
+        if (!user || user.status === 'DELETED' || !user.hashedPassword) {
           await createLog({
-            action: "LOGIN_FAILED_USER_NOT_FOUND",
+            action: "LOGIN_FAILED_USER_NOT_FOUND_OR_INACTIVE",
             ipAddress: ip,
             os: os,
             details: { email }, // Log the email that was attempted
@@ -108,6 +108,19 @@ export const authOptions = {
   },
 
   callbacks: {
+    async signIn({ user }) {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: user.id },
+      });
+
+      if (dbUser && dbUser.status === 'DELETED') {
+        // Block sign-in if user is soft-deleted
+        return false;
+      }
+      
+      // Allow sign-in
+      return true;
+    },
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id;

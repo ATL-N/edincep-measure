@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -19,7 +18,6 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Pre-fill email from query parameter if available
     const emailParam = searchParams.get("email");
     if (emailParam) {
       setEmail(emailParam);
@@ -50,13 +48,12 @@ export default function ResetPasswordPage() {
       const data = await response.json();
 
       if (response.ok) {
-        setMessage(data.message || "Your password has been reset successfully. You can now log in.");
-        // Optionally redirect to login page after a short delay
+        setMessage(data.message || "Your password has been reset successfully. Redirecting to login...");
         setTimeout(() => {
           router.push("/login");
         }, 3000);
       } else {
-        setError(data.error || "Failed to reset password. Please check your token and try again.");
+        setError(data.error || "Failed to reset password. Please check your code and try again.");
       }
     } catch (err) {
       console.error("Password reset failed:", err);
@@ -67,77 +64,82 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-theme(spacing.16))] flex-col items-center justify-center py-10">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl text-center">Reset Password</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-center text-sm text-muted-foreground mb-6">
-            Enter the code sent to your email and your new password.
-          </p>
-          <form onSubmit={handleSubmit} className="grid gap-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold gradient-text">Reset Password</h1>
+            <p className="text-muted-foreground mt-2">
+                Enter the code from your email and a new password.
+            </p>
+        </div>
+
+        <div className="glass rounded-2xl p-8">
+            <form onSubmit={handleSubmit} className="grid gap-4">
             <div className="grid gap-2">
-              <label htmlFor="email">Email</label>
-              <Input
+                <label htmlFor="email" className="text-sm font-medium text-foreground">Email</label>
+                <Input
                 id="email"
                 type="email"
                 placeholder="m@example.com"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={loading || searchParams.get("email")} // Disable if pre-filled from URL
-              />
+                disabled={loading || searchParams.get("email")}
+                className="w-full pl-4 pr-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring"
+                />
             </div>
             <div className="grid gap-2">
-              <label htmlFor="token">Reset Code (6 digits)</label>
-              <Input
+                <label htmlFor="token" className="text-sm font-medium text-foreground">Reset Code</label>
+                <Input
                 id="token"
                 type="text"
-                placeholder="e.g., 123456"
+                placeholder="6-digit code"
                 required
                 maxLength={6}
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
                 disabled={loading}
-              />
+                className="w-full pl-4 pr-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring"
+                />
             </div>
             <div className="grid gap-2">
-              <label htmlFor="newPassword">New Password</label>
-              <Input
+                <label htmlFor="newPassword" className="text-sm font-medium text-foreground">New Password</label>
+                <Input
                 id="newPassword"
                 type="password"
                 required
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 disabled={loading}
-              />
+                className="w-full pl-4 pr-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring"
+                />
             </div>
             <div className="grid gap-2">
-              <label htmlFor="confirmPassword">Confirm New Password</label>
-              <Input
+                <label htmlFor="confirmPassword" className="text-sm font-medium text-foreground">Confirm New Password</label>
+                <Input
                 id="confirmPassword"
                 type="password"
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 disabled={loading}
-              />
+                className="w-full pl-4 pr-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring"
+                />
             </div>
-            {message && <p className="text-green-500 text-sm text-center">{message}</p>}
-            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Resetting..." : "Reset Password"}
+            {message && <p className="text-green-500 text-sm text-center bg-green-500/10 p-3 rounded-lg">{message}</p>}
+            {error && <p className="text-destructive text-sm text-center bg-destructive/10 p-3 rounded-lg">{error}</p>}
+            <Button type="submit" className="w-full gradient-bg text-primary-foreground font-semibold" disabled={loading}>
+                {loading ? "Resetting..." : "Reset Password"}
             </Button>
-          </form>
-          <div className="mt-4 text-center text-sm">
-            Remember your password?{" "}
-            <Link href="/login" className="underline">
+            </form>
+        </div>
+        <p className="text-center text-sm text-muted-foreground mt-8">
+            Suddenly remembered it?{" "}
+            <Link href="/login" className="font-semibold text-primary hover:underline">
               Sign In
             </Link>
-          </div>
-        </CardContent>
-      </Card>
+        </p>
+      </div>
     </div>
   );
 }
