@@ -8,6 +8,7 @@ const redisOptions = {
   // Add password if you have one set in your Redis config
   // password: process.env.REDIS_PASSWORD,
   maxRetriesPerRequest: null, // Important for handling transient connection errors
+  lazyConnect: true, // Prevents connection attempts during build
 };
 
 let redis;
