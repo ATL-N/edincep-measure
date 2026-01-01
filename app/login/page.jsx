@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
-  AtSymbolIcon,
+  UserIcon, // Changed from AtSymbolIcon
   LockClosedIcon,
   ExclamationTriangleIcon,
   EyeIcon,
@@ -35,7 +35,7 @@ const GoogleIcon = () => (
 );
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState(""); // Changed from email
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
@@ -64,14 +64,14 @@ export default function LoginPage() {
 
     const result = await signIn("credentials", {
       redirect: false,
-      email,
+      login, // Changed from email
       password,
     });
 
     setIsLoading(false);
 
     if (result.error) {
-      setError("Invalid email or password. Please try again.");
+      setError("Invalid credentials. Please try again.");
     } else {
       // Redirection is now handled by the useEffect hook
     }
@@ -91,7 +91,7 @@ export default function LoginPage() {
           </p>
         </div>
         <div className="glass rounded-2xl p-8">
-          <button
+          {/* <button
             onClick={() => signIn("google")}
             className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-border rounded-xl bg-background/50 hover:bg-accent transition-colors mb-6 cursor-pointer"
           >
@@ -99,33 +99,34 @@ export default function LoginPage() {
             <span className="font-medium text-foreground">
               Sign in with Google
             </span>
-          </button>
-          <div className="relative mb-6">
+          </button> */}
+          {/* <div className="relative mb-6">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t"></span>
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-background px-2 text-muted-foreground">
-                Or continue with email
+                Or continue with details
               </span>
             </div>
-          </div>
+          </div> */}
           <form onSubmit={handleCredentialsLogin} className="space-y-6">
             <div className="space-y-2">
               <label
-                htmlFor="email"
+                htmlFor="login"
                 className="text-sm font-medium text-foreground"
               >
-                Email Address
+                Email or Phone Number
               </label>
               <div className="relative">
-                <AtSymbolIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="login"
+                  type="text"
+                  value={login}
+                  onChange={(e) => setLogin(e.target.value)}
                   required
+                  placeholder="m@example.com or +123456789"
                   className="w-full pl-10 pr-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring"
                 />
               </div>

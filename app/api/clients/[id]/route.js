@@ -6,18 +6,14 @@ import { prisma } from "@/app/lib/prisma.js";
 // Helper function to count non-null measurement fields in a session
 const countFilledMeasurements = (measurement) => {
   let count = 0;
-  // List of keys to ignore (non-measurement fields)
-  const ignoreKeys = [
-    "id",
-    "clientId",
-    "client",
-    "notes",
-    "createdAt",
-    "updatedAt",
-  ];
-
   for (const key in measurement) {
-    if (!ignoreKeys.includes(key) && measurement[key] !== null) {
+    // A more robust way to count: only include keys that are actual measurement types
+    if (
+      (key.includes("Snug") ||
+        key.includes("Static") ||
+        key.includes("Dynamic")) &&
+      measurement[key] !== null
+    ) {
       count++;
     }
   }

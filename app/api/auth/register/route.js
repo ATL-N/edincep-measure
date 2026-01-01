@@ -7,31 +7,29 @@ import { Prisma } from "@prisma/client";
 
 export async function POST(request) {
   try {
-    let name, email, password;
+    let name, email, phone, password;
     const contentType = request.headers.get("content-type") || "";
 
-    // Check content type and parse body accordingly
     if (contentType.includes("application/json")) {
       const body = await request.json();
       name = body.name;
       email = body.email;
+      phone = body.phone;
       password = body.password;
     } else if (contentType.includes("application/x-www-form-urlencoded")) {
       const formData = await request.formData();
       name = formData.get('name');
       email = formData.get('email');
+      phone = formData.get('phone');
       password = formData.get('password');
     } else {
-      return NextResponse.json(
-        { error: "Unsupported Content-Type" },
-        { status: 415 }
-      );
+      return NextResponse.json({ error: "Unsupported Content-Type" }, { status: 415 });
     }
 
     // 1. Validate input
-    if (!name || !email || !password) {
+    if (!name || (!email && !phone) || !password) {
       return NextResponse.json(
-        { error: "Name, email, and password are required." },
+        { error: "Name, password, and either an email or phone number are required." },
         { status: 400 }
       );
     }
@@ -43,29 +41,41 @@ export async function POST(request) {
       );
     }
 
-    // 2. Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
+    // 2. Check if user already exists with the given email or phone
+    const whereClause = [];
+    if (email) whereClause.push({ email });
+    if (phone) whereClause.push({ phone });
 
-    if (existingUser) {
-      return NextResponse.json(
-        { error: "A designer with this email already exists." },
-        { status: 409 }
-      );
+    if (whereClause.length > 0) {
+        const existingUser = await prisma.user.findFirst({
+            where: { OR: whereClause },
+        });
+
+        if (existingUser) {
+            if (email && existingUser.email === email) {
+                return NextResponse.json({ error: "A user with this email already exists." }, { status: 409 });
+            }
+            if (phone && existingUser.phone === phone) {
+                return NextResponse.json({ error: "A user with this phone number already exists." }, { status: 409 });
+            }
+        }
     }
+
 
     // 3. Hash the password for security
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // 4. Create the new user in the database
+    const userData = {
+      name,
+      hashedPassword,
+      role: Role.DESIGNER,
+    };
+    if (email) userData.email = email;
+    if (phone) userData.phone = phone;
+
     const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        hashedPassword,
-        role: Role.DESIGNER,
-      },
+      data: userData,
     });
 
     // 5. Log the registration event
@@ -86,11 +96,15 @@ export async function POST(request) {
   } catch (error) {
     console.error("Registration Error:", error);
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      // This can still catch race conditions if two requests come in at the same time
       if (error.code === "P2002") {
-        return NextResponse.json(
-          { error: "A designer with this email already exists." },
-          { status: 409 }
-        );
+        const target = error.meta?.target || [];
+        if (target.includes('email')) {
+             return NextResponse.json({ error: "A user with this email already exists." }, { status: 409 });
+        }
+        if (target.includes('phone')) {
+             return NextResponse.json({ error: "A user with this phone number already exists." }, { status: 409 });
+        }
       }
     }
     return NextResponse.json(

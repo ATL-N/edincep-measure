@@ -5,6 +5,7 @@ import { Resend } from "resend";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { isRateLimited } from "@/app/lib/rate-limiter";
+import { sendSms } from "@/app/lib/sms";
 
 // Initialize Resend with the API key from environment variables
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -19,48 +20,46 @@ export async function POST(req) {
   const RATE_LIMIT_WINDOW = 24 * 60 * 60; // 24 hours in seconds
 
   try {
-    const { isLimited, remaining, reset } = await isRateLimited(ip, RATE_LIMIT_LIMIT, RATE_LIMIT_WINDOW);
-    
-    if (isLimited) {
-      return new NextResponse(
-        JSON.stringify({
-          error: "Too many requests. Please try again later.",
-          retryAfter: Math.ceil((reset.getTime() - Date.now()) / 1000),
-        }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': Math.ceil((reset.getTime() - Date.now()) / 1000).toString(),
-          },
-        }
-      );
+    // Only apply rate limiting in production
+    if (process.env.NODE_ENV === 'production') {
+      const { isLimited, reset } = await isRateLimited(ip, RATE_LIMIT_LIMIT, RATE_LIMIT_WINDOW);
+      
+      if (isLimited) {
+        return new NextResponse(
+          JSON.stringify({ error: "Too many requests. Please try again later." }),
+          {
+            status: 429,
+            headers: {
+              'Content-Type': 'application/json',
+              'Retry-After': Math.ceil((reset.getTime() - Date.now()) / 1000).toString(),
+            },
+          }
+        );
+      }
     }
     
-    const { email } = await req.json();
+    const { identifier, method } = await req.json(); // 'identifier' is email or phone, 'method' is 'email' or 'sms'
 
-    // 1. Find the user by email
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
+    if (!identifier || !method) {
+        return NextResponse.json({ error: "Identifier and method are required." }, { status: 400 });
+    }
 
-    // If no user is found, or if the user is soft-deleted, we send a
-    // generic success response to prevent user enumeration attacks.
+    // 1. Find the user by email or phone
+    const isEmail = identifier.includes('@');
+    const whereClause = isEmail ? { email: identifier } : { phone: identifier };
+    const user = await prisma.user.findUnique({ where: whereClause });
+
+    // If no user is found, or if the user is soft-deleted, send a generic success response
     if (!user || user.status === 'DELETED') {
-      return NextResponse.json(
-        { message: "If an account with this email exists, a reset code has been sent." },
-        { status: 200 }
-      );
+      return NextResponse.json({ message: "If an account with this identifier exists, a reset code has been sent." }, { status: 200 });
     }
 
     // 2. Generate a secure 6-digit token
     const resetToken = crypto.randomInt(100000, 1000000).toString();
     const hashedToken = await bcrypt.hash(resetToken, 10);
+    const tokenExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // 3. Set an expiration date (e.g., 10 minutes from now)
-    const tokenExpires = new Date(Date.now() + 10 * 60 * 1000);
-
-    // 4. Update the user record with the hashed token and expiry
+    // 3. Update the user record with the hashed token and expiry
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -69,36 +68,33 @@ export async function POST(req) {
       },
     });
 
-    // 5. Send the email using Resend
-    const appDomain = process.env.DOMAIN || 'localhost:3000';
-    const resetLink = `https://${appDomain}/reset-password?email=${encodeURIComponent(user.email)}`;
+    // 4. Send the notification via the chosen method
+    if (method === 'email') {
+        if (!user.email) {
+            return NextResponse.json({ error: "This user does not have a registered email address." }, { status: 400 });
+        }
+        const appDomain = process.env.DOMAIN || 'localhost:3000';
+        const resetLink = `https://${appDomain}/reset-password?email=${encodeURIComponent(user.email)}`;
+        await resend.emails.send({
+            from: fromEmail,
+            to: user.email,
+            subject: "Your Password Reset Code",
+            html: `<p>Your password reset code is: <strong>${resetToken}</strong>. It expires in 10 minutes. Click here to reset: <a href="${resetLink}">Reset Password</a></p>`,
+        });
+    } else if (method === 'sms') {
+        if (!user.phone) {
+            return NextResponse.json({ error: "This user does not have a registered phone number." }, { status: 400 });
+        }
+        const shortMessage = `Your password reset code is: ${resetToken}. It expires in 10 mins.`;
+        await sendSms(user.phone, shortMessage);
+    } else {
+        return NextResponse.json({ error: "Invalid delivery method specified." }, { status: 400 });
+    }
 
-    await resend.emails.send({
-      from: fromEmail,
-      to: user.email,
-      subject: "Your Password Reset Code",
-      html: `
-        <div>
-          <h1>Password Reset Request</h1>
-          <p>You requested to reset your password. Please use the following 6-digit code:</p>
-          <h2 style="font-size: 24px; letter-spacing: 2px; margin: 20px 0;">${resetToken}</h2>
-          <p>This code will expire in 10 minutes.</p>
-          <p>Please click the link below and enter the code to set a new password:</p>
-          <a href="${resetLink}" target="_blank">Reset Your Password</a>
-          <p>If you did not request this, please ignore this email.</p>
-        </div>
-      `,
-    });
+    return NextResponse.json({ message: "If an account with this identifier exists, a reset code has been sent." }, { status: 200 });
 
-    return NextResponse.json(
-      { message: "If an account with this email exists, a reset code has been sent." },
-      { status: 200 }
-    );
   } catch (error) {
     console.error("Password Reset Request Error:", error);
-    return NextResponse.json(
-      { error: "An internal server error occurred." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "An internal server error occurred." }, { status: 500 });
   }
 }

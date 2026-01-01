@@ -1,28 +1,33 @@
 // app/lib/redis.js
 import IORedis from "ioredis";
 
-// Centralized Redis client configuration
-const redisOptions = {
-  host: process.env.REDIS_HOST || "localhost",
-  port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT, 10) : 6379,
-  // Add password if you have one set in your Redis config
-  // password: process.env.REDIS_PASSWORD,
-  maxRetriesPerRequest: null, // Important for handling transient connection errors
-  lazyConnect: true, // Prevents connection attempts during build
-};
+let redis = null;
 
-let redis;
+// This logic is now very strict. By default, Redis is disabled.
+// It will only be enabled if it detects the specific production Docker environment.
 
-// This pattern ensures that in a serverless environment (like Vercel in production),
-// a new connection is not created on every function invocation.
-// The global object is not affected by hot-reloading in development.
-if (process.env.NODE_ENV === "production") {
+// The `REDIS_HOST` environment variable is set to 'redis' in docker-compose.yml,
+// so this condition will only be true when running inside Docker via `docker compose up`.
+if (process.env.NODE_ENV === 'production' && process.env.REDIS_HOST === 'redis') {
+  
+  const redisOptions = {
+    host: process.env.REDIS_HOST,
+    port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT, 10) : 6379,
+    maxRetriesPerRequest: null,
+    // lazyConnect is crucial to prevent connection attempts during the build process.
+    lazyConnect: true,
+  };
+
+  console.log("Production environment detected. Initializing Redis connection...");
   redis = new IORedis(redisOptions);
+
+  redis.on('error', (err) => {
+    console.error('Redis Connection Error:', err);
+  });
+  
 } else {
-  if (!global.redis) {
-    global.redis = new IORedis(redisOptions);
-  }
-  redis = global.redis;
+  // In any other environment (like local `npm run dev`), `redis` remains `null`.
+  console.log("Non-production or non-Docker environment detected. Redis is disabled.");
 }
 
 export default redis;

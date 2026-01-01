@@ -40,26 +40,25 @@ export const authOptions = {
     CredentialsProvider({
       name: "credentials",
       credentials: {
-        email: { label: "Email", type: "text" },
+        login: { label: "Email or Phone", type: "text" },
         password: { label: "Password", type: "password" },
       },
-      // IMPORTANT: The authorize function can accept a second argument: the request object
       async authorize(credentials, req) {
-        // Get IP and User-Agent from the request headers
-        const ip =
-          req.headers["x-forwarded-for"] ||
-          req.headers["x-real-ip"] ||
-          req.socket.remoteAddress;
+        const ip = req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || req.socket.remoteAddress;
         const os = req.headers["user-agent"];
-        const email = credentials?.email;
+        const login = credentials?.login;
 
-        if (!email || !credentials?.password) {
-          // You can log this as well, though it's less critical
+        if (!login || !credentials?.password) {
           throw new Error("Invalid credentials.");
         }
 
+        // Check if the login identifier is an email or a phone number
+        const isEmail = login.includes('@');
+        
+        const whereClause = isEmail ? { email: login } : { phone: login };
+
         const user = await prisma.user.findUnique({
-          where: { email },
+          where: whereClause,
         });
 
         // Case 1: User not found or is soft-deleted
@@ -68,7 +67,7 @@ export const authOptions = {
             action: "LOGIN_FAILED_USER_NOT_FOUND_OR_INACTIVE",
             ipAddress: ip,
             os: os,
-            details: { email }, // Log the email that was attempted
+            details: { login },
           });
           throw new Error("Invalid credentials.");
         }
@@ -81,11 +80,11 @@ export const authOptions = {
         // Case 2: Incorrect password
         if (!isPasswordCorrect) {
           await createLog({
-            userId: user.id, // We have the user ID here
+            userId: user.id,
             action: "LOGIN_FAILED_WRONG_PASSWORD",
             ipAddress: ip,
             os: os,
-            details: { email },
+            details: { login },
           });
           throw new Error("Invalid credentials.");
         }
@@ -108,17 +107,26 @@ export const authOptions = {
   },
 
   callbacks: {
-    async signIn({ user }) {
-      const dbUser = await prisma.user.findUnique({
-        where: { id: user.id },
-      });
+    async signIn({ user, account }) {
+      // For credentials provider, the authorization is already handled in the 'authorize' function.
+      if (account.provider === "credentials") {
+        return true;
+      }
 
-      if (dbUser && dbUser.status === 'DELETED') {
-        // Block sign-in if user is soft-deleted
-        return false;
+      // For OAuth providers, we need to check if the user is allowed to sign in.
+      if (user && user.email) {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: user.email },
+        });
+
+        // If the user already exists in the DB, check their status.
+        if (dbUser && dbUser.status === 'DELETED') {
+          // Returning false will prevent the user from signing in.
+          return false;
+        }
       }
       
-      // Allow sign-in
+      // If it's a new user or an existing active user, allow the sign-in.
       return true;
     },
     async session({ session, token }) {

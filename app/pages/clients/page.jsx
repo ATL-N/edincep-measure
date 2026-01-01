@@ -101,7 +101,7 @@ export default function ClientsPage() {
       setIsLoading(false);
       setIsSearching(false);
     }
-  }, [isLoading, currentPage, debouncedSearchTerm, filterStatus, sortBy]);
+  }, [currentPage, debouncedSearchTerm, filterStatus, sortBy]);
 
   // Effect to re-fetch when dependencies change
   useEffect(() => {
@@ -256,99 +256,88 @@ export default function ClientsPage() {
           </motion.div>
         ) : (
           <>
-            {/* Clients Grid with smooth transition on search */}
-            <motion.div
+            {/* Clients Grid - Simplified to fix visibility bug */}
+            <div
               className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-opacity duration-300 ${
                 isSearching ? "opacity-50" : "opacity-100"
               }`}
-              variants={containerVariants}
             >
-              <AnimatePresence>
-                {clients.map((client) => (
-                  <motion.div
-                    key={client.id}
-                    className="glass rounded-2xl p-6 card-3d hover:shadow-2xl group cursor-pointer"
-                    variants={itemVariants}
-                    layout
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    whileHover={{
-                      scale: 1.02,
-                      rotateY: 5,
-                      transition: { type: "spring", stiffness: 300 },
-                    }}
-                  >
-                    <Link href={`/pages/clients/${client.id}`}>
-                      {/* Client card content remains the same */}
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="w-12 h-12 rounded-full gradient-bg flex items-center justify-center text-white font-semibold text-lg">
-                            {client.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </div>
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              client.status === "Active"
-                                ? "bg-green-500/10 text-green-500"
-                                : "bg-orange-500/10 text-orange-500"
-                            }`}
-                          >
-                            {client.status}
-                          </span>
+              {clients.map((client) => (
+                <div
+                  key={client.id}
+                  className="glass rounded-2xl p-6 hover:shadow-2xl"
+                >
+                  <Link href={`/pages/clients/${client.id}`} className="block">
+                    {/* Client card content remains the same */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="w-12 h-12 rounded-full gradient-bg flex items-center justify-center text-white font-semibold text-lg">
+                          {client.name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")}
                         </div>
-                        <div>
-                          <h3 className="text-lg font-semibold text-foreground mb-1">
-                            {client.name}
-                          </h3>
-                          <div className="space-y-2">
-                            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                              <PhoneIcon className="w-4 h-4" />
-                              <span>{client.phone || "N/A"}</span>
-                            </div>
-                            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                              <EnvelopeIcon className="w-4 h-4" />
-                              <span className="truncate">
-                                {client.email || "N/A"}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border/50">
-                          <div className="text-center">
-                            <span className="text-sm text-muted-foreground mb-1">
-                              Measurements
-                            </span>
-                            <p className="text-lg font-semibold text-foreground">
-                              {client._count.measurements}
-                            </p>
-                          </div>
-                          <div className="text-center">
-                            <span className="text-sm text-muted-foreground mb-1">
-                              Last Visit
-                            </span>
-                            <p className="text-sm font-medium text-foreground">
-                              {client.measurements[0]?.createdAt
-                                ? new Date(
-                                    client.measurements[0].createdAt
-                                  ).toLocaleDateString()
-                                : "Never"}
-                            </p>
-                          </div>
-                        </div>
-                        {client.notes && (
-                          <div className="pt-2 border-t border-border/30">
-                            <p className="text-xs text-muted-foreground italic">
-                              "{client.notes}"
-                            </p>
-                          </div>
-                        )}
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            client.status === "Active"
+                              ? "bg-green-500/10 text-green-500"
+                              : "bg-orange-500/10 text-orange-500"
+                          }`}
+                        >
+                          {client.status}
+                        </span>
                       </div>
-                    </Link>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </motion.div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-foreground mb-1">
+                          {client.name}
+                        </h3>
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                            <PhoneIcon className="w-4 h-4" />
+                            <span>{client.phone || "N/A"}</span>
+                          </div>
+                          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                            <EnvelopeIcon className="w-4 h-4" />
+                            <span className="truncate">
+                              {client.email || "N/A"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border/50">
+                        <div className="text-center">
+                          <span className="text-sm text-muted-foreground mb-1">
+                            Measurements
+                          </span>
+                          <p className="text-lg font-semibold text-foreground">
+                            {client._count.measurements}
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <span className="text-sm text-muted-foreground mb-1">
+                            Last Visit
+                          </span>
+                          <p className="text-sm font-medium text-foreground">
+                            {client.measurements[0]?.createdAt
+                              ? new Date(
+                                  client.measurements[0].createdAt
+                                ).toLocaleDateString()
+                              : "Never"}
+                          </p>
+                        </div>
+                      </div>
+                      {client.notes && (
+                        <div className="pt-2 border-t border-border/30">
+                          <p className="text-xs text-muted-foreground italic">
+                            "{client.notes}"
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                </div>
+              ))}
+            </div>
 
             {/* Empty State */}
             {!isSearching && clients.length === 0 && (

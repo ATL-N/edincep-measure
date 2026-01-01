@@ -14,7 +14,82 @@ import {
   Edit3,
   AlertTriangle,
   Trash2,
+  Share2,
+  Clipboard,
 } from "lucide-react";
+
+// Modal Component for displaying the share link
+const ShareLinkModal = ({ isOpen, onClose, link, isLoading, error, onGenerate }) => {
+  if (!isOpen) return null;
+
+  const handleCopyToClipboard = () => {
+    navigator.clipboard.writeText(link);
+    // You can add a toast notification here for better UX
+    alert("Link copied to clipboard!");
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="glass rounded-2xl p-8 border w-full max-w-lg"
+      >
+        <h2 className="text-2xl font-bold gradient-text mb-4">Share Measurement Form</h2>
+        <p className="text-muted-foreground mb-6">
+          Send this link to the client. It is valid for 3 days for them to submit their measurements.
+        </p>
+
+        {error && (
+          <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg mb-4">
+            {error}
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="flex items-center justify-center h-24">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : link ? (
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <input
+                type="text"
+                value={link}
+                readOnly
+                className="w-full bg-background/50 border border-border rounded-lg p-2 text-sm"
+              />
+              <button
+                onClick={handleCopyToClipboard}
+                className="bg-primary text-primary-foreground p-2 rounded-lg hover:bg-primary/90"
+              >
+                <Clipboard className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-center text-muted-foreground">
+              Link is valid for 3 days for initial submission and 2 hours for updates after submission.
+            </p>
+          </div>
+        ) : (
+          <div className="text-center">
+             <button onClick={onGenerate} className="bg-primary text-primary-foreground px-6 py-3 rounded-xl">Generate Link</button>
+          </div>
+        )}
+
+        <div className="mt-8 flex justify-end">
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Close
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 
 // Skeleton Component for a better loading experience
 const ClientProfileSkeleton = () => (
@@ -63,6 +138,12 @@ export default function ClientProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // State for the Share Link Modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [shareLink, setShareLink] = useState(null);
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [shareLinkError, setShareLinkError] = useState(null);
+
   const handleDelete = async () => {
     if (window.confirm("Are you sure you want to delete this client? This action cannot be undone.")) {
       setError(null);
@@ -84,6 +165,30 @@ export default function ClientProfilePage() {
 
   const handleEdit = () => {
     router.push(`/pages/clients/${id}/edit`);
+  };
+
+  const handleGenerateLink = async () => {
+    setIsGeneratingLink(true);
+    setShareLinkError(null);
+    setShareLink(null);
+    try {
+      const response = await fetch(`/api/clients/${id}/measurements/share`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to generate link.");
+      setShareLink(data.sharableUrl);
+    } catch (err) {
+      setShareLinkError(err.message);
+    } finally {
+      setIsGeneratingLink(false);
+    }
+  };
+
+  const openShareModal = () => {
+    // Reset state every time the modal is opened
+    setShareLink(null);
+    setShareLinkError(null);
+    setIsGeneratingLink(false);
+    setIsModalOpen(true);
   };
 
   useEffect(() => {
@@ -195,7 +300,16 @@ export default function ClientProfilePage() {
                   </div>
                 </div>
               </div>
-              <div className="flex space-x-3 self-start">
+              <div className="flex space-x-3 self-start flex-wrap">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={openShareModal}
+                  className="bg-secondary text-secondary-foreground px-6 py-3 rounded-xl flex items-center space-x-2 hover:bg-accent transition-colors"
+                >
+                  <Share2 className="w-5 h-5" />
+                  <span>Share Form</span>
+                </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -349,6 +463,14 @@ export default function ClientProfilePage() {
           </div>
         </motion.div>
       </motion.div>
+      <ShareLinkModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        link={shareLink}
+        isLoading={isGeneratingLink}
+        error={shareLinkError}
+        onGenerate={handleGenerateLink}
+      />
     </div>
   );
 }

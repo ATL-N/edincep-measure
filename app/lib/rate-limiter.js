@@ -11,6 +11,11 @@ import redis from "./redis";
  *   the number of remaining requests, and the time when the limit will reset.
  */
 export async function isRateLimited(identifier, limit, windowInSeconds) {
+  // If redis is not configured (e.g. in local dev), bypass rate limiting.
+  if (!redis) {
+    return { isLimited: false, remaining: limit, reset: new Date() };
+  }
+
   const key = `rate_limit:${identifier}`;
   const now = Date.now();
   const windowStart = now - windowInSeconds * 1000;

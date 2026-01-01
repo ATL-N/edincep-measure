@@ -7,13 +7,14 @@ import { motion } from "framer-motion";
 import {
   UserIcon,
   AtSymbolIcon,
+  PhoneIcon, // Added
   LockClosedIcon,
   ExclamationTriangleIcon,
   EyeIcon,
   EyeSlashIcon,
 } from "@heroicons/react/24/outline";
 
-// A simple Google icon component
+// A simple Google icon component remains the same...
 const GoogleIcon = () => (
   <svg viewBox="0 0 48 48" className="w-6 h-6">
     <path
@@ -38,6 +39,7 @@ const GoogleIcon = () => (
 export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState(""); // Added phone state
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
@@ -57,10 +59,16 @@ export default function SignupPage() {
     }
   }, [session, status, router]);
 
-  const handleEmailSignup = async (e) => {
+  const handleSignup = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+
+    if (!email && !phone) {
+      setError("Please provide either an email or a phone number.");
+      setIsLoading(false);
+      return;
+    }
 
     if (password.length < 8) {
       setError("Password must be at least 8 characters long.");
@@ -72,7 +80,7 @@ export default function SignupPage() {
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, phone, password }),
       });
 
       if (!response.ok) {
@@ -80,16 +88,17 @@ export default function SignupPage() {
         throw new Error(errorData.error || "Failed to create account.");
       }
 
+      // Use the identifier that the user provided to log in
+      const loginIdentifier = email || phone;
+
       const result = await signIn("credentials", {
         redirect: false,
-        email,
+        login: loginIdentifier,
         password,
       });
 
       if (result.error) {
-        setError(
-          "Account created, but failed to log in automatically. Please try logging in."
-        );
+        setError("Account created, but failed to log in automatically. Please try logging in.");
         setIsLoading(false);
       } else {
         // Redirection is now handled by the useEffect hook
@@ -108,124 +117,78 @@ export default function SignupPage() {
         className="w-full max-w-md"
       >
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold gradient-text">
-            Create Your Designer Account
-          </h1>
+          <h1 className="text-4xl font-bold gradient-text">Create Your Account</h1>
           <p className="text-muted-foreground mt-2">
             Sign up to start managing your clients and measurements.
           </p>
         </div>
         <div className="glass rounded-2xl p-8">
-          <button
+          {/* <button
             onClick={() => signIn("google")}
             className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-border rounded-xl bg-background/50 hover:bg-accent transition-colors mb-6 cursor-pointer">
             <GoogleIcon />
-            <span className="font-medium text-foreground">
-              Sign up with Google
-            </span>
+            <span className="font-medium text-foreground">Sign up with Google</span>
           </button>
           <div className="relative mb-6">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t"></span>
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                Or sign up with email
-              </span>
+              <span className="bg-background px-2 text-muted-foreground">Or sign up with details</span>
             </div>
-          </div>
-          <form onSubmit={handleEmailSignup} className="space-y-6">
+          </div> */}
+          <form onSubmit={handleSignup} className="space-y-6">
             <div className="space-y-2">
-              <label
-                htmlFor="name"
-                className="text-sm font-medium text-foreground"
-              >
-                Full Name
-              </label>
+              <label htmlFor="name" className="text-sm font-medium text-foreground">Full Name</label>
               <div className="relative">
                 <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  className="w-full pl-10 pr-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring"
-                />
+                <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} required className="w-full pl-10 pr-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring" />
               </div>
             </div>
+
             <div className="space-y-2">
-              <label
-                htmlFor="email"
-                className="text-sm font-medium text-foreground"
-              >
-                Email Address
-              </label>
+              <label htmlFor="email" className="text-sm font-medium text-foreground">Email Address</label>
               <div className="relative">
                 <AtSymbolIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full pl-10 pr-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring"
-                />
+                <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-10 pr-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring" />
               </div>
             </div>
+
             <div className="space-y-2">
-              <label
-                htmlFor="password"
-                className="text-sm font-medium text-foreground"
-              >
-                Password
-              </label>
+              <label htmlFor="phone" className="text-sm font-medium text-foreground">Phone Number</label>
+              <div className="relative">
+                <PhoneIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full pl-10 pr-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring" />
+              </div>
+               <p className="text-xs text-muted-foreground px-1">Please provide an email or a phone number.</p>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="password" className="text-sm font-medium text-foreground">Password</label>
               <div className="relative">
                 <LockClosedIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  className="w-full pl-10 pr-10 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground"
-                >
+                <input id="password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} className="w-full pl-10 pr-10 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring" />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground">
                   {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
                 </button>
               </div>
             </div>
+            
             {error && (
               <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg flex items-center gap-2">
                 <ExclamationTriangleIcon className="w-5 h-5" />
                 {error}
               </div>
             )}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 gradient-bg text-primary-foreground font-semibold rounded-lg disabled:opacity-50 flex items-center justify-center cursor-pointer"
-            >
-              {isLoading && (
-                <div className="w-5 h-5 border-2 border-primary-foreground/50 border-t-primary-foreground rounded-full animate-spin mr-2" />
-              )}
+            <button type="submit" disabled={isLoading} className="w-full py-3 gradient-bg text-primary-foreground font-semibold rounded-lg disabled:opacity-50 flex items-center justify-center cursor-pointer">
+              {isLoading && <div className="w-5 h-5 border-2 border-primary-foreground/50 border-t-primary-foreground rounded-full animate-spin mr-2" />}
               {isLoading ? "Creating Account..." : "Create Account"}
             </button>
           </form>
         </div>
         <p className="text-center text-sm text-muted-foreground mt-8">
           Already have an account?{" "}
-          <Link
-            href="/login"
-            className="font-semibold text-primary hover:underline"
-          >
-            Log in
-          </Link>
+          <Link href="/login" className="font-semibold text-primary hover:underline">Log in</Link>
         </p>
       </motion.div>
     </div>

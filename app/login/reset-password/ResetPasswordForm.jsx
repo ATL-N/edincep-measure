@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 export default function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [token, setToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -19,9 +19,9 @@ export default function ResetPasswordForm() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const emailParam = searchParams.get("email");
-    if (emailParam) {
-      setEmail(emailParam);
+    const identifierParam = searchParams.get("identifier");
+    if (identifierParam) {
+      setIdentifier(identifierParam);
     }
   }, [searchParams]);
 
@@ -43,7 +43,7 @@ export default function ResetPasswordForm() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, token, newPassword }),
+        body: JSON.stringify({ identifier, token, newPassword }),
       });
 
       const data = await response.json();
@@ -70,22 +70,22 @@ export default function ResetPasswordForm() {
         <div className="text-center mb-8">
             <h1 className="text-4xl font-bold gradient-text">Reset Password</h1>
             <p className="text-muted-foreground mt-2">
-                Enter the code from your email and a new password.
+                Enter the code you received and a new password.
             </p>
         </div>
 
         <div className="glass rounded-2xl p-8">
             <form onSubmit={handleSubmit} className="grid gap-4">
             <div className="grid gap-2">
-                <label htmlFor="email" className="text-sm font-medium text-foreground">Email</label>
+                <label htmlFor="identifier" className="text-sm font-medium text-foreground">Email or Phone Number</label>
                 <Input
-                id="email"
-                type="email"
-                placeholder="m@example.com"
+                id="identifier"
+                type="text"
+                placeholder="m@example.com or +123456789"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={loading || searchParams.get("email")}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                disabled={loading || searchParams.get("identifier")}
                 className="w-full pl-4 pr-3 py-2 rounded-lg border bg-input text-foreground focus:ring-2 focus:ring-ring"
                 />
             </div>

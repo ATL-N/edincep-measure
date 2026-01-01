@@ -5,18 +5,20 @@ import bcrypt from "bcryptjs";
 
 export async function POST(req) {
   try {
-    const { email, token, newPassword } = await req.json();
+    const { identifier, token, newPassword } = await req.json();
 
-    if (!email || !token || !newPassword) {
+    if (!identifier || !token || !newPassword) {
       return NextResponse.json(
-        { error: "Email, token, and new password are required." },
+        { error: "Identifier, token, and new password are required." },
         { status: 400 }
       );
     }
 
-    // 1. Find the user by email
+    // 1. Find the user by email or phone
+    const isEmail = identifier.includes('@');
+    const whereClause = isEmail ? { email: identifier } : { phone: identifier };
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: whereClause,
     });
 
     if (!user) {
