@@ -24,7 +24,8 @@ export default function Settings() {
   const { theme, setTheme } = useTheme();
   const { data: session, update } = useSession();
   const [activeTab, setActiveTab] = useState("general");
-  const [measurementUnit, setMeasurementUnit] = useState("INCH");
+  // Initialize state directly from session to prevent flicker, with a fallback
+  const [measurementUnit, setMeasurementUnit] = useState(session?.user?.measurementUnit || "INCH");
   
   // State for the main save button
   const [saving, setSaving] = useState(false);
@@ -46,12 +47,6 @@ export default function Settings() {
     { id: "security", label: "Security", icon: Shield },
   ];
 
-  useEffect(() => {
-    if (session?.user?.measurementUnit) {
-      setMeasurementUnit(session.user.measurementUnit);
-    }
-  }, [session]);
-
   const handleSaveGeneral = async () => {
     setSaving(true);
     setError(null);
@@ -68,7 +63,8 @@ export default function Settings() {
         throw new Error(errData.error || "Failed to save settings.");
       }
 
-      await update({ measurementUnit });
+      // Correctly update the session with the new value
+      await update({ measurementUnit: measurementUnit });
       setSuccess("Settings saved successfully!");
     } catch (err) {
       setError(err.message);

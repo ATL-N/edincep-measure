@@ -140,19 +140,34 @@ export const authOptions = {
       return session;
     },
     async jwt({ token, user }) {
+      // If the user object is passed, it's a sign-in event.
+      // Persist the user's ID in the token.
       if (user) {
+        token.id = user.id;
+      }
+
+      // On subsequent requests, the token will have the `id`.
+      // We use this ID to re-fetch the user's data from the database on every session access.
+      // This ensures the session data is always fresh and consistent with the database.
+      if (token?.id) {
         const dbUser = await prisma.user.findUnique({
-          where: { id: user.id },
+          where: { id: token.id },
           include: { clientProfile: true },
         });
-        token.id = dbUser.id;
-        token.role = dbUser.role;
-        token.status = dbUser.status;
-        token.measurementUnit = dbUser.measurementUnit; // <-- Add to token
-        if (dbUser.clientProfile) {
-          token.clientId = dbUser.clientProfile.id;
+
+        if (dbUser) {
+          // Return a new token object with the latest, fresh data from the DB.
+          return {
+            ...token, // Keep existing token properties like iat, exp, etc.
+            id: dbUser.id,
+            role: dbUser.role,
+            status: dbUser.status,
+            measurementUnit: dbUser.measurementUnit,
+            clientId: dbUser.clientProfile?.id || null,
+          };
         }
       }
+
       return token;
     },
   },

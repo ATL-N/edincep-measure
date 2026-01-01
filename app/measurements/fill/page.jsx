@@ -16,14 +16,40 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  AlertTriangle, // Added this import
 } from "lucide-react";
 
-// Helper to convert display names to camelCase DB fields
 const toCamelCase = (str) => {
   return str
     .toLowerCase()
     .replace(/[^a-zA-Z0-9]+(.)/g, (m, chr) => chr.toUpperCase());
 };
+
+// Unit Toggle Component
+const UnitToggle = ({ currentUnit, onUnitChange }) => (
+  <div className="flex items-center space-x-1 p-1 rounded-full bg-muted border">
+    <button
+      onClick={() => onUnitChange("INCH")}
+      className={`px-3 py-1 text-sm font-semibold rounded-full transition-all duration-300 ${
+        currentUnit === "INCH"
+          ? "bg-primary text-primary-foreground shadow-md"
+          : "bg-transparent text-muted-foreground hover:bg-accent"
+      }`}
+    >
+      Inches (in)
+    </button>
+    <button
+      onClick={() => onUnitChange("CENTIMETER")}
+      className={`px-3 py-1 text-sm font-semibold rounded-full transition-all duration-300 ${
+        currentUnit === "CENTIMETER"
+          ? "bg-primary text-primary-foreground shadow-md"
+          : "bg-transparent text-muted-foreground hover:bg-accent"
+      }`}
+    >
+      Centimeters (cm)
+    </button>
+  </div>
+);
 
 // Simplified measurement categories with descriptions for clients
 const measurementCategories = {
@@ -128,6 +154,8 @@ export default function FillMeasurementPage() {
   const [error, setError] = useState(null);
   const [pageMessage, setPageMessage] = useState({ type: "", text: "" }); // 'info', 'success', 'error'
   const [expirationTime, setExpirationTime] = useState(null); // For display
+  const [showUnitChangeConfirm, setShowUnitChangeConfirm] = useState(false);
+  const [pendingUnit, setPendingUnit] = useState(null);
 
   const displayUnitLabel = clientUnit === "CENTIMETER" ? "cm" : "in";
 
@@ -210,7 +238,26 @@ export default function FillMeasurementPage() {
   }, [token]);
 
   const handleMeasurementChange = (fieldName, value) => {
-    setMeasurements((prev) => ({ ...prev, [fieldName]: value }));
+    // Allow empty string or numbers with up to two decimal places
+    if (value === "" || /^-?\d*\.?\d{0,2}$/.test(value)) {
+      setMeasurements((prev) => ({ ...prev, [fieldName]: value }));
+    }
+  };
+
+  const handleUnitChangeRequest = (newUnit) => {
+    if (newUnit !== clientUnit && Object.values(measurements).some(v => v !== '')) {
+      setPendingUnit(newUnit);
+      setShowUnitChangeConfirm(true);
+    } else if (newUnit !== clientUnit) {
+      setClientUnit(newUnit);
+    }
+  };
+
+  const confirmUnitChange = () => {
+    setClientUnit(pendingUnit);
+    setMeasurements({}); // Clear measurements
+    setShowUnitChangeConfirm(false);
+    setPendingUnit(null);
   };
 
   const toggleCategory = (category) => {
@@ -282,6 +329,35 @@ export default function FillMeasurementPage() {
 
   return (
     <div className="min-h-screen pt-0 md:pt-30 pb-10 mb-24 px-4 sm:px-6 lg:px-8">
+       {showUnitChangeConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="glass rounded-2xl p-8 border w-full max-w-sm text-center"
+          >
+            <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold mb-2">Change Units?</h2>
+            <p className="text-muted-foreground mb-6">
+              Switching units will clear all values you have already entered. Are you sure you want to continue?
+            </p>
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={() => setShowUnitChangeConfirm(false)}
+                className="px-6 py-2 rounded-lg border border-border hover:bg-accent"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmUnitChange}
+                className="px-6 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                Yes, Change
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
       <motion.div
         initial="hidden"
         animate="visible"
@@ -304,22 +380,29 @@ export default function FillMeasurementPage() {
                     )}
                 </div>
             )}
-            <h1 className="text-3xl font-bold gradient-text mb-2">
-              {existingMeasurementId ? "Update Your Measurements" : "Submit Your Measurements"}
-            </h1>
-            <p className="text-muted-foreground">
-              For client:{" "}
-              <span className="font-semibold text-foreground">
-                {clientName}
-              </span>
-              {" "}shared by{" "}
-              <span className="font-semibold text-foreground">
-                {designerName}
-              </span>
-            </p>
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold gradient-text mb-2">
+                    {existingMeasurementId ? "Update Your Measurements" : "Submit Your Measurements"}
+                    </h1>
+                    <p className="text-muted-foreground">
+                    For client:{" "}
+                    <span className="font-semibold text-foreground">
+                        {clientName}
+                    </span>
+                    {" "}shared by{" "}
+                    <span className="font-semibold text-foreground">
+                        {designerName}
+                    </span>
+                    </p>
+                </div>
+                <div className="flex-shrink-0">
+                    <UnitToggle currentUnit={clientUnit} onUnitChange={handleUnitChangeRequest} />
+                </div>
+            </div>
             <p className="mt-4 text-sm text-yellow-500 bg-yellow-500/10 p-3 rounded-lg flex items-center gap-2">
               <AlertCircle className="w-4 h-4" />
-              Please provide accurate measurements. All values should be in {clientUnit.toLowerCase()}.
+              Please provide accurate measurements. All values should be in {clientUnit.toLowerCase()}. You can change your preferred unit using the toggle above.
             </p>
           </div>
         </motion.div>
