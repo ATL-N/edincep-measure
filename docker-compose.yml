@@ -7,7 +7,7 @@ services:
     env_file:
       - .env
     environment:
-      - DOMAIN=${DOMAIN:-measuremate.edinception.online}
+      - DOMAIN=${DOMAIN:-measuremate.edinception.com}
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@measuremate-db:5432/${DB_NAME:-measuremate}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
