@@ -85,13 +85,14 @@ export async function POST(req) {
         if (!user.phone) {
             return NextResponse.json({ error: "This user does not have a registered phone number." }, { status: 400 });
         }
+        
         const shortMessage = `Your password reset code is: ${resetToken}. It expires in 10 mins.`;
         await sendSms(user.phone, shortMessage);
     } else {
         return NextResponse.json({ error: "Invalid delivery method specified." }, { status: 400 });
     }
 
-    return NextResponse.json({ message: "If an account with this identifier exists, a reset code has been sent." }, { status: 200 });
+    return NextResponse.json({message: "If an account with this identifier exists, a reset code has been sent." }, { status: 200 });
 
   } catch (error) {
     console.error("Password Reset Request Error:", error);

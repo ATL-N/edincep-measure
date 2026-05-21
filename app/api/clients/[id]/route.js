@@ -73,7 +73,7 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     const { firstName, lastName, phone, email, address, notes, status } = body;
     
@@ -140,7 +140,7 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     const existingClient = await prisma.client.findUnique({ where: { id } });
     if (!existingClient) {
@@ -149,7 +149,7 @@ export async function DELETE(request, { params }) {
 
     // 2. Update the client's status to DELETED
     await prisma.client.update({
-      where: { id: params.id },
+      where: { id },
       data: { status: 'DELETED' },
     });
 

@@ -42,14 +42,51 @@ export const authOptions = {
       credentials: {
         login: { label: "Email or Phone", type: "text" },
         password: { label: "Password", type: "password" },
+        otp: { label: "OTP", type: "text" }, // --- NEW: Add OTP support
       },
       async authorize(credentials, req) {
         const ip = req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || req.socket.remoteAddress;
         const os = req.headers["user-agent"];
         const login = credentials?.login;
 
-        if (!login || !credentials?.password) {
-          throw new Error("Invalid credentials.");
+        if (!login) {
+          throw new Error("Login identifier is required.");
+        }
+
+        // --- NEW: OTP LOGIN FLOW ---
+        if (credentials?.otp) {
+          const user = await prisma.user.findUnique({
+            where: login.includes('@') ? { email: login } : { phone: login },
+          });
+
+          if (!user || !user.otpCode || !user.otpExpires || user.otpExpires < new Date()) {
+            throw new Error("Invalid or expired OTP.");
+          }
+
+          const isOtpValid = await bcrypt.compare(credentials.otp, user.otpCode);
+          if (!isOtpValid) {
+            throw new Error("Invalid OTP.");
+          }
+
+          // Clear OTP after successful login
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { otpCode: null, otpExpires: null },
+          });
+
+          await createLog({
+            userId: user.id,
+            action: "USER_LOGIN_SUCCESS_OTP",
+            ipAddress: ip,
+            os: os,
+          });
+
+          return user;
+        }
+
+        // --- EXISTING: PASSWORD LOGIN FLOW (INTACT) ---
+        if (!credentials?.password) {
+          throw new Error("Password is required.");
         }
 
         // Check if the login identifier is an email or a phone number
@@ -135,20 +172,19 @@ export const authOptions = {
         session.user.role = token.role;
         session.user.status = token.status;
         session.user.clientId = token.clientId;
-        session.user.measurementUnit = token.measurementUnit; // <-- Add to session
+        session.user.measurementUnit = token.measurementUnit;
+        session.user.phone = token.phone;
+        session.user.image = token.image;
+        session.user.email = token.email;
+        session.user.name = token.name;
       }
       return session;
     },
     async jwt({ token, user }) {
-      // If the user object is passed, it's a sign-in event.
-      // Persist the user's ID in the token.
       if (user) {
         token.id = user.id;
       }
 
-      // On subsequent requests, the token will have the `id`.
-      // We use this ID to re-fetch the user's data from the database on every session access.
-      // This ensures the session data is always fresh and consistent with the database.
       if (token?.id) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id },
@@ -156,13 +192,16 @@ export const authOptions = {
         });
 
         if (dbUser) {
-          // Return a new token object with the latest, fresh data from the DB.
           return {
-            ...token, // Keep existing token properties like iat, exp, etc.
+            ...token,
             id: dbUser.id,
+            name: dbUser.name,
+            email: dbUser.email,
+            image: dbUser.image,
             role: dbUser.role,
             status: dbUser.status,
             measurementUnit: dbUser.measurementUnit,
+            phone: dbUser.phone,
             clientId: dbUser.clientProfile?.id || null,
           };
         }

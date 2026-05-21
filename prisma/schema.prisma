@@ -46,7 +46,9 @@ model User {
   hashedPassword String?
   passwordResetToken String?
   passwordResetTokenExpires DateTime?
-  measurementUnit MeasurementUnit @default(INCH) // --- NEW: Add user preference ---
+  otpCode String?
+  otpExpires DateTime?
+  measurementUnit MeasurementUnit @default(INCH)
 
   // --- Auth.js relations ---
   accounts Account[]

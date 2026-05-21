@@ -180,33 +180,31 @@ export async function POST(request) {
         { status: 400 }
       );
     }
-     if (!email) {
-      return NextResponse.json(
-        { error: "Email is required." },
-        { status: 400 }
-      );
-    }
-
 
     // 5. Upsert User and Create Client in a transaction
     const client = await prisma.$transaction(async (prisma) => {
-      // Step 5a: Find or create the user
+      // Step 5a: Find or create the user linked to this client
+      // We use the phone number as the unique identifier for clients who don't have emails
       let clientUser = await prisma.user.findUnique({
-        where: { email },
+        where: { phone },
       });
 
       if (clientUser) {
         // If user exists, update their details
         clientUser = await prisma.user.update({
-          where: { email },
-          data: { name },
+          where: { id: clientUser.id },
+          data: { 
+            name,
+            email: email || clientUser.email // Only update email if provided
+          },
         });
       } else {
         // If user does not exist, create a new one
         clientUser = await prisma.user.create({
           data: {
             name,
-            email,
+            phone,
+            email: email || null,
             role: 'CLIENT', // Assign CLIENT role
           },
         });
@@ -217,7 +215,7 @@ export async function POST(request) {
         data: {
           name,
           phone,
-          email,
+          email: email || null,
           address,
           dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
           notes,
