@@ -5,7 +5,13 @@ import { getToken } from "next-auth/jwt";
 export async function middleware(req) {
   const { pathname } = req.nextUrl;
   const origin = req.headers.get("origin");
-  const allowedOrigins = ["http://localhost:8000", "http://127.0.0.1:8000", "http://192.168.0.84:8000"];
+  const allowedOrigins = [
+    "https://app.edinmeasure.edinception.com",
+    "https://edinmeasure.edinception.com",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://192.168.0.84:8000",
+  ];
 
   console.log(`Middleware: ${req.method} ${pathname} | Origin: ${origin}`);
 
@@ -14,8 +20,14 @@ export async function middleware(req) {
     const response = new NextResponse(null, { status: 204 });
     if (origin && allowedOrigins.includes(origin)) {
       response.headers.set("Access-Control-Allow-Origin", origin);
-      response.headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS,PATCH");
-      response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version");
+      response.headers.set(
+        "Access-Control-Allow-Methods",
+        "GET,POST,PUT,DELETE,OPTIONS,PATCH",
+      );
+      response.headers.set(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version",
+      );
       response.headers.set("Access-Control-Allow-Credentials", "true");
       response.headers.set("Access-Control-Max-Age", "86400");
     }
@@ -36,7 +48,7 @@ export async function middleware(req) {
 
   // 3. Authorization Logic
   let response;
-  
+
   if (isPublicPath) {
     response = NextResponse.next();
   } else {
@@ -47,9 +59,16 @@ export async function middleware(req) {
 
     if (pathname === "/") {
       if (token) {
-        if (token.role === "ADMIN") return NextResponse.redirect(new URL("/pages/admin/dashboard", req.url));
-        if (token.role === "DESIGNER") return NextResponse.redirect(new URL("/pages/dashboard", req.url));
-        if (token.role === "CLIENT") return NextResponse.redirect(new URL("/pages/client/dashboard", req.url));
+        if (token.role === "ADMIN")
+          return NextResponse.redirect(
+            new URL("/pages/admin/dashboard", req.url),
+          );
+        if (token.role === "DESIGNER")
+          return NextResponse.redirect(new URL("/pages/dashboard", req.url));
+        if (token.role === "CLIENT")
+          return NextResponse.redirect(
+            new URL("/pages/client/dashboard", req.url),
+          );
         return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
       response = NextResponse.next();
@@ -61,20 +80,36 @@ export async function middleware(req) {
       return NextResponse.redirect(loginUrl);
     } else {
       // Role-based checks
-      if (pathname.startsWith("/pages/admin") && token.role !== "ADMIN") return NextResponse.redirect(new URL("/unauthorized", req.url));
-      if (pathname.startsWith("/pages/dashboard") && token.role !== "DESIGNER") return NextResponse.redirect(new URL("/unauthorized", req.url));
-      if (pathname.startsWith("/pages/client/dashboard") && token.role !== "CLIENT") return NextResponse.redirect(new URL("/unauthorized", req.url));
-      
+      if (pathname.startsWith("/pages/admin") && token.role !== "ADMIN")
+        return NextResponse.redirect(new URL("/unauthorized", req.url));
+      if (pathname.startsWith("/pages/dashboard") && token.role !== "DESIGNER")
+        return NextResponse.redirect(new URL("/unauthorized", req.url));
+      if (
+        pathname.startsWith("/pages/client/dashboard") &&
+        token.role !== "CLIENT"
+      )
+        return NextResponse.redirect(new URL("/unauthorized", req.url));
+
       response = NextResponse.next();
     }
   }
 
   // 4. Apply CORS headers to ALL API responses
-  if (pathname.startsWith("/api") && origin && allowedOrigins.includes(origin)) {
+  if (
+    pathname.startsWith("/api") &&
+    origin &&
+    allowedOrigins.includes(origin)
+  ) {
     response.headers.set("Access-Control-Allow-Origin", origin);
     response.headers.set("Access-Control-Allow-Credentials", "true");
-    response.headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS,PATCH");
-    response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version");
+    response.headers.set(
+      "Access-Control-Allow-Methods",
+      "GET,POST,PUT,DELETE,OPTIONS,PATCH",
+    );
+    response.headers.set(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version",
+    );
   }
 
   return response;
