@@ -38,6 +38,12 @@ export async function PUT(req) {
     }, { status: 200 });
 
   } catch (error) {
+    if (error.code === 'P2002' && error.meta?.target?.includes('email')) {
+      return NextResponse.json(
+        { error: "This email address is already registered to another account." },
+        { status: 400 }
+      );
+    }
     console.error("Profile Setup Error:", error);
     return NextResponse.json({ error: "An internal server error occurred." }, { status: 500 });
   }

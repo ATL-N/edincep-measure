@@ -163,6 +163,8 @@ export default function LandingPage() {
                 </Link>
                 <Link
                   href="https://app.edinmeasure.edinception.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center px-8 py-4 text-lg font-semibold text-white bg-green-500 rounded-2xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
                 >
                   Get measureMe App
