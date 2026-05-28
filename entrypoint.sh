@@ -23,6 +23,8 @@ echo "Database is ready."
 # 2. Run database migrations
 echo "Running database migrations..."
 ./node_modules/.bin/prisma migrate deploy
+echo "Pushing database schema updates..."
+./node_modules/.bin/prisma db push --accept-data-loss
 
 # 3. Seed the database if needed
 echo "Seeding database..."
