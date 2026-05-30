@@ -119,9 +119,28 @@ export async function POST(req, { params }) {
     }
 
     // 3. Get the data from the request body
-    // The client has already formatted the data correctly (e.g., { waistStatic: 28.0 })
     const body = await req.json();
-    const { notes, ...measurementData } = body;
+    const { notes, ...incomingData } = body;
+
+    // Process measurement data to ensure Snug, Static, and Dynamic are all populated
+    // This maintains consistency with how the Flutter app saves data.
+    const measurementData = {};
+    Object.keys(incomingData).forEach(key => {
+      const value = incomingData[key];
+      if (value !== null && value !== undefined) {
+        // If the key already has a suffix, find the base name
+        let baseName = key;
+        if (key.endsWith('Static')) baseName = key.replace('Static', '');
+        else if (key.endsWith('Snug')) baseName = key.replace('Snug', '');
+        else if (key.endsWith('Dynamic')) baseName = key.replace('Dynamic', '');
+
+        // Standardize: Populate the Trio
+        const numValue = parseFloat(value);
+        measurementData[`${baseName}Snug`] = numValue;
+        measurementData[`${baseName}Static`] = numValue - 0.5;
+        measurementData[`${baseName}Dynamic`] = numValue + 0.5;
+      }
+    });
 
     let resultMeasurement;
     let message;
@@ -132,23 +151,21 @@ export async function POST(req, { params }) {
         where: { id: shareLink.measurementId },
         data: {
           notes,
-          ...measurementData, // Use the data directly from the client
+          ...measurementData,
           updatedAt: now,
         },
       });
       message = "Measurements updated successfully!";
-      // No SMS on update as per requirements
-
     } else {
       // CREATE new measurement
-      const updateWindowEnd = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 hours from now
+      const updateWindowEnd = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 hours
 
       resultMeasurement = await prisma.measurement.create({
         data: {
           clientId: shareLink.clientId,
           creatorId: shareLink.designerId,
           notes,
-          ...measurementData, // Use the data directly from the client
+          ...measurementData,
           createdAt: now,
           updatedAt: now,
         },
