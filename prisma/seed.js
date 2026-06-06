@@ -72,13 +72,16 @@ async function main() {
     },
   ];
 
-  const clients = await Promise.all(
-      clientData.map(c => prisma.client.upsert({
-          where: { email: c.email },
-          update: c,
-          create: c,
-      }))
-  );
+  const clients = [];
+  for (const c of clientData) {
+    let client = await prisma.client.findFirst({
+      where: { phone: c.phone },
+    });
+    if (!client) {
+      client = await prisma.client.create({ data: c });
+    }
+    clients.push(client);
+  }
   console.log("✅ Upserted clients:", clients.length);
 
 
@@ -397,10 +400,65 @@ async function main() {
     })
   );
     
-    console.log("✅ Created measurements:", measurements.length);
+  console.log("✅ Created measurements:", measurements.length);
   } else {
     console.log("✅ Found existing measurements, skipping measurement seed.");
   }
+
+  // --- NEW: Seed Finance Categories ---
+  console.log("🌱 Seeding finance categories...");
+  const categories = [
+    { name: "Zip", type: "MATERIAL", unit: "pcs", isGlobal: true },
+    { name: "Beads", type: "MATERIAL", unit: "pack", isGlobal: true },
+    { name: "Buttons", type: "MATERIAL", unit: "pcs", isGlobal: true },
+    { name: "Lace", type: "MATERIAL", unit: "yards", isGlobal: true },
+    { name: "Thread", type: "MATERIAL", unit: "spool", isGlobal: true },
+    { name: "Needles", type: "TOOL", unit: "pcs", isGlobal: true },
+    { name: "Sewing Machine", type: "TOOL", unit: "unit", isGlobal: true },
+    { name: "Scissors", type: "TOOL", unit: "pcs", isGlobal: true },
+    { name: "Labour", type: "LABOUR", unit: "man-hours", isGlobal: true },
+    { name: "Electricity", type: "BILL", unit: "kwh", isGlobal: true },
+    { name: "Rent", type: "RENT", unit: "month", isGlobal: true },
+    { name: "Custom Made", type: "REVENUE", unit: "item", isGlobal: true },
+    { name: "Ready-to-Wear", type: "REVENUE", unit: "item", isGlobal: true },
+    { name: "Alteration", type: "REVENUE", unit: "item", isGlobal: true },
+  ];
+
+  for (const cat of categories) {
+    let existingCat = await prisma.financeCategory.findFirst({
+      where: { 
+        name: cat.name,
+        type: cat.type,
+        isGlobal: true
+      }
+    });
+
+    if (!existingCat) {
+      existingCat = await prisma.financeCategory.create({
+        data: cat
+      });
+    }
+
+    // Seed initial stock for Materials and Tools
+    if (cat.type === 'MATERIAL' || cat.type === 'TOOL') {
+      const existingStock = await prisma.inventoryStock.findUnique({
+        where: { categoryId: existingCat.id }
+      });
+
+      if (!existingStock) {
+        await prisma.inventoryStock.create({
+          data: {
+            categoryId: existingCat.id,
+            designerId: designer.id,
+            currentQuantity: 10,
+            lowStockThreshold: 2,
+            unitPriceAverage: 0,
+          }
+        });
+      }
+    }
+  }
+  console.log("✅ Finance categories and stock seeded.");
   
   console.log("🎉 Seeding completed successfully!");
 }

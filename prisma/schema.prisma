@@ -71,6 +71,12 @@ model User {
 
   // --- NEW: Measurement Share Links created by this designer ---
   shareLinksCreated MeasurementShareLink[]
+
+  // --- NEW: Finance & Inventory relations ---
+  financeCategories  FinanceCategory[]
+  inventoryStocks    InventoryStock[]
+  transactions       Transaction[]
+  clientGroups       ClientGroup[]
 }
 
 // Model for linking OAuth accounts (e.g., Google) to a User.
@@ -180,6 +186,10 @@ model Client {
 
   // --- NEW: Share links created for this client ---
   shareLinks MeasurementShareLink[]
+
+  // --- NEW: Finance relations ---
+  jobCostings  JobCosting[]
+  groupMembers ClientGroupMember[]
 
   @@index([name])
   @@map("clients")
@@ -335,8 +345,138 @@ model Measurement {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // --- NEW: Finance relations ---
+  jobCostings JobCosting[]
+
   @@index([creatorId])
   @@map("measurements")
+}
+
+// --- NEW: FINANCE & INVENTORY MODELS ---
+
+enum FinanceCategoryType {
+  MATERIAL
+  TOOL
+  BILL
+  REVENUE
+  LABOUR
+  MARKETING
+  RENT
+  OTHER
+}
+
+enum TransactionType {
+  REVENUE
+  EXPENSE
+}
+
+model FinanceCategory {
+  id          String              @id @default(cuid())
+  name        String
+  type        FinanceCategoryType
+  unit        String              @default("unit") // e.g., Yards, Pcs, Meters
+  usageCount  Int                 @default(0)
+  isGlobal    Boolean             @default(false)
+  
+  // Multi-tenancy: linked to a designer unless it's a global default
+  designerId  String?
+  designer    User?               @relation(fields: [designerId], references: [id])
+  
+  transactions Transaction[]
+  stock        InventoryStock?
+  
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([name, designerId, type])
+  @@map("finance_categories")
+}
+
+model InventoryStock {
+  id                String          @id @default(cuid())
+  categoryId        String          @unique
+  category          FinanceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  
+  designerId        String
+  designer          User            @relation(fields: [designerId], references: [id])
+  
+  currentQuantity   Float           @default(0)
+  lowStockThreshold Float           @default(0)
+  unitPriceAverage  Float           @default(0)
+  lastRestocked     DateTime?
+  
+  updatedAt         DateTime        @updatedAt
+
+  @@map("inventory_stocks")
+}
+
+model Transaction {
+  id              String          @id @default(cuid())
+  type            TransactionType
+  
+  categoryId      String
+  category        FinanceCategory @relation(fields: [categoryId], references: [id])
+  
+  designerId      String
+  designer        User            @relation(fields: [designerId], references: [id])
+  
+  amount          Float
+  quantity        Float           @default(1)
+  date            DateTime        @default(now())
+  notes           String?         @db.Text
+  receiptImageUrl String?
+  
+  // Job Costing (Multi-client allocation)
+  jobCostings     JobCosting[]
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@map("transactions")
+}
+
+model JobCosting {
+  id              String          @id @default(cuid())
+  transactionId   String
+  transaction     Transaction     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  
+  clientId        String
+  client          Client          @relation(fields: [clientId], references: [id])
+  
+  measurementId   String?
+  measurement     Measurement?    @relation(fields: [measurementId], references: [id])
+  
+  quantityUsed    Float           @default(0)
+  
+  createdAt       DateTime        @default(now())
+
+  @@map("job_costings")
+}
+
+model ClientGroup {
+  id              String          @id @default(cuid())
+  name            String
+  designerId      String
+  designer        User            @relation(fields: [designerId], references: [id])
+  
+  members         ClientGroupMember[]
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([name, designerId])
+  @@map("client_groups")
+}
+
+model ClientGroupMember {
+  groupId         String
+  group           ClientGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  clientId        String
+  client          Client          @relation(fields: [clientId], references: [id])
+
+  @@id([groupId, clientId])
+  @@map("client_group_members")
 }
 
 // --- NEW: Model for Sharable Measurement Links ---

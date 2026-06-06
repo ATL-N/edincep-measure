@@ -29,7 +29,7 @@ echo "Pushing database schema updates..."
 # 3. Seed the database if needed
 echo "Seeding database..."
 # The seed script should be idempotent, so it's safe to run every time.
-# ./node_modules/.bin/prisma db seed
+./node_modules/.bin/prisma db seed
 
 # Unset the password variable for security
 unset PGPASSWORD

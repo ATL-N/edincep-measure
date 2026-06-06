@@ -38,7 +38,13 @@ export async function sendSms(phoneNumber, message) {
         );
 
         if (!response.ok) {
-            const errorData = await response.json();
+            const errorText = await response.text();
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch (e) {
+                errorData = errorText;
+            }
             console.error("Arkesel API responded with an error:", errorData);
             return false;
         }

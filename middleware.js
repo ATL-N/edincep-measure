@@ -9,6 +9,7 @@ export async function middleware(req) {
     "https://app.edinmeasure.edinception.com",
     "https://edinmeasure.edinception.com",
     "http://localhost:8000",
+    "http://localhost:7000",
     "http://127.0.0.1:8000",
     "http://192.168.0.84:8000",
   ];

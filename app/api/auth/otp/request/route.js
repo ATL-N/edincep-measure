@@ -53,11 +53,14 @@ export async function POST(req) {
 
     if (!smsSent) {
        // Note: In development, we return the OTP in the error message for convenience
-       const devResponse = process.env.NODE_ENV === 'development' 
-        ? { message: `(Dev Mode) SMS failed, but here is your code: ${otp}` }
-        : { error: "Failed to send verification code. Please try again." };
+       if (process.env.NODE_ENV === 'development') {
+         return NextResponse.json({ 
+           message: `(Dev Mode) SMS failed, but here is your code: ${otp}`,
+           isNewUser: !user.name 
+         }, { status: 200 });
+       }
         
-       return NextResponse.json(devResponse, { status: smsSent ? 200 : 500 });
+       return NextResponse.json({ error: "Failed to send verification code. Please try again." }, { status: 500 });
     }
 
     return NextResponse.json({ 
