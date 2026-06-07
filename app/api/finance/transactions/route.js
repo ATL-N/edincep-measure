@@ -56,6 +56,7 @@ export async function POST(req) {
     console.log("[DIAGNOSTIC] Transaction POST body:", JSON.stringify(body, null, 2));
 
     const { 
+        id, // Optional client-provided ID
         type, categoryId, amount, quantity, 
         notes, receiptImageUrl, clientId, measurementId, date,
         jobCostings // Array of { clientId, measurementId, quantityUsed }
@@ -82,6 +83,7 @@ export async function POST(req) {
       // 1. Create the transaction
       const transaction = await tx.transaction.create({
         data: {
+          id: id || undefined, // Use provided ID or let Prisma generate a CUID
           type,
           categoryId,
           designerId: user.id,
