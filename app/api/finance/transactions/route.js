@@ -17,7 +17,13 @@ export async function GET(req) {
       where: { designerId: user.id },
       include: {
         category: true,
-        client: { select: { id: true, name: true } }
+        jobCostings: {
+          include: {
+            client: {
+              select: { id: true, name: true }
+            }
+          }
+        }
       },
       orderBy: { date: 'desc' },
       skip,
@@ -47,6 +53,8 @@ export async function POST(req) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
+    console.log("[DIAGNOSTIC] Transaction POST body:", JSON.stringify(body, null, 2));
+
     const { 
         type, categoryId, amount, quantity, 
         notes, receiptImageUrl, clientId, measurementId, date,
@@ -65,7 +73,8 @@ export async function POST(req) {
     });
 
     if (!category) {
-      return NextResponse.json({ error: "Category not found" }, { status: 404 });
+      console.error(`[DIAGNOSTIC] Category NOT FOUND for ID: ${categoryId}. Designer: ${user.id}`);
+      return NextResponse.json({ error: `Category ${categoryId} not found on server. Please sync categories first.` }, { status: 404 });
     }
 
     // Transactional create to ensure data integrity
@@ -80,8 +89,6 @@ export async function POST(req) {
           quantity: parseFloat(quantity || 1),
           notes,
           receiptImageUrl,
-          clientId,
-          measurementId,
           date: date ? new Date(date) : new Date(),
         }
       });
