@@ -14,7 +14,10 @@ export async function GET(req) {
     const skip = (page - 1) * limit;
 
     const transactions = await prisma.transaction.findMany({
-      where: { designerId: user.id },
+      where: { 
+        designerId: user.id,
+        type: { not: 'USAGE' }
+      },
       include: {
         category: true,
         jobCostings: {
@@ -30,7 +33,12 @@ export async function GET(req) {
       take: limit,
     });
 
-    const total = await prisma.transaction.count({ where: { designerId: user.id } });
+    const total = await prisma.transaction.count({ 
+      where: { 
+        designerId: user.id,
+        type: { not: 'USAGE' }
+      } 
+    });
 
     return NextResponse.json({
       transactions,
@@ -113,29 +121,39 @@ export async function POST(req) {
         data: { usageCount: { increment: 1 } }
       });
 
-      // 4. Update Inventory if it's a MATERIAL or TOOL expense
-      if (type === 'EXPENSE' && (category.type === 'MATERIAL' || category.type === 'TOOL')) {
+      // 4. Update Inventory if it's a MATERIAL or TOOL expense/usage
+      if ((type === 'EXPENSE' || type === 'USAGE') && (category.type === 'MATERIAL' || category.type === 'TOOL')) {
         const stock = await tx.inventoryStock.findUnique({
           where: { categoryId }
         });
 
+        const isUsage = type === 'USAGE';
+
         if (stock) {
           // Update existing stock
-          const newTotalQuantity = stock.currentQuantity + transaction.quantity;
-          const totalOldValue = stock.currentQuantity * stock.unitPriceAverage;
-          const totalNewValue = transaction.amount;
-          const newAverage = (totalOldValue + totalNewValue) / newTotalQuantity;
+          // If usage, subtract quantity. If expense (purchase), add quantity.
+          const newTotalQuantity = isUsage 
+            ? Math.max(0, stock.currentQuantity - transaction.quantity)
+            : stock.currentQuantity + transaction.quantity;
+
+          let newAverage = stock.unitPriceAverage;
+          if (!isUsage && newTotalQuantity > 0) {
+            // Recalculate moving average only for purchases
+            const totalOldValue = stock.currentQuantity * stock.unitPriceAverage;
+            const totalNewValue = transaction.amount;
+            newAverage = (totalOldValue + totalNewValue) / newTotalQuantity;
+          }
 
           await tx.inventoryStock.update({
             where: { id: stock.id },
             data: {
               currentQuantity: newTotalQuantity,
               unitPriceAverage: newAverage,
-              lastRestocked: transaction.date
+              lastRestocked: isUsage ? undefined : transaction.date
             }
           });
-        } else {
-          // Create new stock entry
+        } else if (!isUsage) {
+          // Create new stock entry (only for purchases)
           await tx.inventoryStock.create({
             data: {
               categoryId,

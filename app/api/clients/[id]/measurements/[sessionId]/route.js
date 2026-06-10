@@ -364,7 +364,12 @@ export async function PUT(request, { params }) {
     }
 
     // 4. Prepare the data for update
-    const { notes, orderStatus, completionDeadline, materialImageUrl, designImageUrl, ...measurements } = body;
+    const { 
+      notes, orderStatus, completionDeadline, 
+      materialImageUrl, designImageUrl, 
+      localMaterialImageBytes, localDesignImageBytes, // IGNORE
+      ...measurements 
+    } = body;
 
     // Convert numeric measurement values from string to float
     const measurementData = {};

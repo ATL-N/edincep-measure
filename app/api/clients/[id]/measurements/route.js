@@ -192,6 +192,8 @@ export async function POST(request, { params }) {
       completionDeadline,
       materialImageUrl = "",
       designImageUrl = "",
+      localMaterialImageBytes, // IGNORE BYTES
+      localDesignImageBytes, // IGNORE BYTES
       // Exclude these fields that shouldn't be in the create data
       id,
       createdAt,
@@ -232,6 +234,7 @@ export async function POST(request, { params }) {
     const finalOrderStatus = orderStatus || status || "ORDER_CONFIRMED";
 
     const measurementData = {
+      id: id || undefined, // Use provided UUID or let Prisma generate a CUID
       clientId: clientId, // Already validated as non-null
       creatorId: currentUser.id, // Already validated as non-null
       notes: notes || "",

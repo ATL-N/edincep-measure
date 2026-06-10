@@ -156,6 +156,7 @@ export async function POST(request) {
     // 3. Get the request body
     const body = await request.json();
     const {
+      id, // Optional client-provided ID
       firstName,
       lastName,
       phone,
@@ -213,6 +214,7 @@ export async function POST(request) {
       // Step 5b: Create the client and associate with the designer and user
       const newClient = await prisma.client.create({
         data: {
+          id: id || undefined, // Use provided ID or let Prisma generate a CUID
           name,
           phone,
           email: email || null,

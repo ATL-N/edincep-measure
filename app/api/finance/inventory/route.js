@@ -16,7 +16,7 @@ export async function GET(req) {
       orderBy: { category: { name: 'asc' } }
     });
 
-    return NextResponse.json(stocks);
+    return NextResponse.json({ inventory: stocks });
   } catch (error) {
     console.error("Inventory GET Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

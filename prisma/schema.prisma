@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,93 +5,52 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-
 }
 
-// ---------------------------------
-// --- USER & AUTH MODELS ---
-// ---------------------------------
-
-// Defines the user roles for the entire application.
-enum Role {
-  CLIENT    // A customer who has an account to view their measurements.
-  DESIGNER  // A fashion designer who manages clients and takes measurements.
-  ADMIN     // A super admin who can oversee the entire system.
-}
-
-enum UserStatus {
-  ACTIVE
-  DELETED
-}
-
-// --- NEW: Add an enum for measurement units ---
-enum MeasurementUnit {
-  INCH
-  CENTIMETER
-}
-
-// The core User model for anyone who logs into the system.
 model User {
-  id             String    @id @default(cuid())
-  name           String?
-  email          String?   @unique
-  phone          String?   @unique
-  emailVerified  DateTime?
-  image          String?
-  role           Role      @default(CLIENT)
-  status         UserStatus @default(ACTIVE)
-  hashedPassword String?
-  passwordResetToken String?
+  id                        String                 @id @default(cuid())
+  name                      String?
+  email                     String?                @unique
+  emailVerified             DateTime?
+  image                     String?
+  role                      Role                   @default(CLIENT)
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
+  hashedPassword            String?
+  status                    UserStatus             @default(ACTIVE)
+  measurementUnit           MeasurementUnit        @default(INCH)
+  passwordResetToken        String?
   passwordResetTokenExpires DateTime?
-  otpCode String?
-  otpExpires DateTime?
-  measurementUnit MeasurementUnit @default(INCH)
-
-  // --- Auth.js relations ---
-  accounts Account[]
-  sessions Session[]
-  logs     Log[]
-
-  // --- Application-specific relations ---
-  // If the user IS a client, this links to their client profile.
-  clientProfile Client? @relation("ClientUser")
-
-  // --- NEW: A designer is assigned to many clients via the join table ---
-  // This replaces the old one-to-many `clientsAsDesigner` field.
-  assignedClients ClientDesigner[]
-
-  // A list of all measurement sessions created by this user (for auditing).
-  createdMeasurements Measurement[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // --- NEW: Measurement Share Links created by this designer ---
-  shareLinksCreated MeasurementShareLink[]
-
-  // --- NEW: Finance & Inventory relations ---
-  financeCategories  FinanceCategory[]
-  inventoryStocks    InventoryStock[]
-  transactions       Transaction[]
-  clientGroups       ClientGroup[]
+  phone                     String?                @unique
+  otpCode                   String?
+  otpExpires                DateTime?
+  accounts                  Account[]
+  sessions                  Session[]
+  assignedClients           ClientDesigner[]
+  clientGroups              ClientGroup[]
+  clientProfile             Client?                @relation("ClientUser")
+  financeCategories         FinanceCategory[]
+  inventoryStocks           InventoryStock[]
+  logs                      Log[]
+  shareLinksCreated         MeasurementShareLink[]
+  createdMeasurements       Measurement[]
+  transactions              Transaction[]
 }
 
-// Model for linking OAuth accounts (e.g., Google) to a User.
 model Account {
   id                String  @id @default(cuid())
   userId            String
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -107,7 +63,6 @@ model Session {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// Model for "magic link" email sign-ins.
 model VerificationToken {
   identifier String
   token      String   @unique
@@ -116,83 +71,284 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// ------------------------------------
-// --- LOGGING & AUDITING ---
-// ------------------------------------
-
 model Log {
   id        String   @id @default(cuid())
-  userId    String?  // <-- Change this from String to String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade) // <-- Change User to User?
+  userId    String?
   ipAddress String?
   os        String?
   action    String
   details   Json?
   createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("logs")
 }
 
-
-// ------------------------------------
-// --- APPLICATION MODELS ---
-// ------------------------------------
-
-enum RecordStatus {
-  ACTIVE
-  DELETED
-}
-
-// --- NEW: JOIN TABLE for Many-to-Many Relationship ---
-// This table connects a User (Designer) to a Client.
-// Each row signifies that a specific designer is assigned to a specific client.
 model ClientDesigner {
   clientId   String
   designerId String
-  assignedAt DateTime @default(now()) // You can track when the assignment was made.
+  assignedAt DateTime @default(now())
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  designer   User     @relation(fields: [designerId], references: [id], onDelete: Cascade)
 
-  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  designer User   @relation(fields: [designerId], references: [id], onDelete: Cascade)
-
-  @@id([clientId, designerId]) // Composite primary key ensures a designer is assigned to a client only once.
+  @@id([clientId, designerId])
   @@map("client_designers")
 }
 
 model Client {
-  id          String       @id @default(cuid())
-  name        String
-  phone       String?
-  email       String?
-  address     String?
-  dateOfBirth DateTime?
-  notes       String?
-  status      RecordStatus @default(ACTIVE)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  // --- NEW: Many-to-Many Relationship ---
-  // A client can have many assigned designers, linked via the ClientDesigner table.
-  // This replaces the old `designer` and `designerId` fields.
+  id                String                 @id @default(cuid())
+  name              String
+  phone             String?
+  email             String?
+  address           String?
+  dateOfBirth       DateTime?
+  notes             String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  userId            String?                @unique
+  status            RecordStatus           @default(ACTIVE)
   assignedDesigners ClientDesigner[]
-
-  // If the client is also a user on the platform, this links to their User account.
-  // This is optional and unique.
-  userId String? @unique
-  user   User?   @relation("ClientUser", fields: [userId], references: [id], onDelete: SetNull)
-
-  // Existing relationship to measurements remains the same.
-  measurements Measurement[]
-
-  // --- NEW: Share links created for this client ---
-  shareLinks MeasurementShareLink[]
-
-  // --- NEW: Finance relations ---
-  jobCostings  JobCosting[]
-  groupMembers ClientGroupMember[]
+  groupMembers      ClientGroupMember[]
+  user              User?                  @relation("ClientUser", fields: [userId], references: [id])
+  jobCostings       JobCosting[]
+  shareLinks        MeasurementShareLink[]
+  measurements      Measurement[]
 
   @@index([name])
   @@map("clients")
+}
+
+model Measurement {
+  id                           String                @id @default(cuid())
+  clientId                     String
+  creatorId                    String
+  shoulderToChestSnug          Float?
+  shoulderToChestStatic        Float?
+  shoulderToChestDynamic       Float?
+  shoulderToBustSnug           Float?
+  shoulderToBustStatic         Float?
+  shoulderToBustDynamic        Float?
+  shoulderToUnderbustSnug      Float?
+  shoulderToUnderbustStatic    Float?
+  shoulderToUnderbustDynamic   Float?
+  shoulderToWaistFrontSnug     Float?
+  shoulderToWaistFrontStatic   Float?
+  shoulderToWaistFrontDynamic  Float?
+  shoulderToWaistBackSnug      Float?
+  shoulderToWaistBackStatic    Float?
+  shoulderToWaistBackDynamic   Float?
+  waistToHipSnug               Float?
+  waistToHipStatic             Float?
+  waistToHipDynamic            Float?
+  shoulderToKneeSnug           Float?
+  shoulderToKneeStatic         Float?
+  shoulderToKneeDynamic        Float?
+  shoulderToDressLengthSnug    Float?
+  shoulderToDressLengthStatic  Float?
+  shoulderToDressLengthDynamic Float?
+  shoulderToAnkleSnug          Float?
+  shoulderToAnkleStatic        Float?
+  shoulderToAnkleDynamic       Float?
+  shoulderWidthSnug            Float?
+  shoulderWidthStatic          Float?
+  shoulderWidthDynamic         Float?
+  nippleToNippleSnug           Float?
+  nippleToNippleStatic         Float?
+  nippleToNippleDynamic        Float?
+  offShoulderSnug              Float?
+  offShoulderStatic            Float?
+  offShoulderDynamic           Float?
+  bustSnug                     Float?
+  bustStatic                   Float?
+  bustDynamic                  Float?
+  underBustSnug                Float?
+  underBustStatic              Float?
+  underBustDynamic             Float?
+  waistSnug                    Float?
+  waistStatic                  Float?
+  waistDynamic                 Float?
+  hipSnug                      Float?
+  hipStatic                    Float?
+  hipDynamic                   Float?
+  thighSnug                    Float?
+  thighStatic                  Float?
+  thighDynamic                 Float?
+  kneeSnug                     Float?
+  kneeStatic                   Float?
+  kneeDynamic                  Float?
+  ankleSnug                    Float?
+  ankleStatic                  Float?
+  ankleDynamic                 Float?
+  neckSnug                     Float?
+  neckStatic                   Float?
+  neckDynamic                  Float?
+  shirtSleeveSnug              Float?
+  shirtSleeveStatic            Float?
+  shirtSleeveDynamic           Float?
+  elbowLengthSnug              Float?
+  elbowLengthStatic            Float?
+  elbowLengthDynamic           Float?
+  longSleevesSnug              Float?
+  longSleevesStatic            Float?
+  longSleevesDynamic           Float?
+  aroundArmSnug                Float?
+  aroundArmStatic              Float?
+  aroundArmDynamic             Float?
+  elbowSnug                    Float?
+  elbowStatic                  Float?
+  elbowDynamic                 Float?
+  wristSnug                    Float?
+  wristStatic                  Float?
+  wristDynamic                 Float?
+  inSeamSnug                   Float?
+  inSeamStatic                 Float?
+  inSeamDynamic                Float?
+  outSeamSnug                  Float?
+  outSeamStatic                Float?
+  outSeamDynamic               Float?
+  notes                        String?
+  createdAt                    DateTime              @default(now())
+  updatedAt                    DateTime              @updatedAt
+  completionDeadline           DateTime?
+  designImageUrl               String?
+  materialImageUrl             String?
+  orderStatus                  OrderStatus           @default(ORDER_CONFIRMED)
+  status                       RecordStatus          @default(ACTIVE)
+  jobCostings                  JobCosting[]
+  shareLink                    MeasurementShareLink?
+  client                       Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  creator                      User                  @relation(fields: [creatorId], references: [id])
+
+  @@index([creatorId])
+  @@map("measurements")
+}
+
+model FinanceCategory {
+  id           String              @id @default(cuid())
+  name         String
+  type         FinanceCategoryType
+  usageCount   Int                 @default(0)
+  isGlobal     Boolean             @default(false)
+  designerId   String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  unit         String              @default("unit")
+  designer     User?               @relation(fields: [designerId], references: [id])
+  stock        InventoryStock?
+  transactions Transaction[]
+
+  @@unique([name, designerId, type])
+  @@map("finance_categories")
+}
+
+model InventoryStock {
+  id                String          @id @default(cuid())
+  categoryId        String          @unique
+  designerId        String
+  currentQuantity   Float           @default(0)
+  lowStockThreshold Float           @default(0)
+  unitPriceAverage  Float           @default(0)
+  lastRestocked     DateTime?
+  updatedAt         DateTime        @updatedAt
+  category          FinanceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  designer          User            @relation(fields: [designerId], references: [id])
+
+  @@map("inventory_stocks")
+}
+
+model Transaction {
+  id              String          @id @default(cuid())
+  type            TransactionType
+  categoryId      String
+  designerId      String
+  amount          Float
+  quantity        Float           @default(1)
+  date            DateTime        @default(now())
+  notes           String?
+  receiptImageUrl String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  jobCostings     JobCosting[]
+  category        FinanceCategory @relation(fields: [categoryId], references: [id])
+  designer        User            @relation(fields: [designerId], references: [id])
+
+  @@map("transactions")
+}
+
+model JobCosting {
+  id            String       @id @default(cuid())
+  transactionId String
+  clientId      String
+  measurementId String?
+  quantityUsed  Float        @default(0)
+  createdAt     DateTime     @default(now())
+  client        Client       @relation(fields: [clientId], references: [id])
+  measurement   Measurement? @relation(fields: [measurementId], references: [id])
+  transaction   Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@map("job_costings")
+}
+
+model ClientGroup {
+  id         String              @id @default(cuid())
+  name       String
+  designerId String
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  members    ClientGroupMember[]
+  designer   User                @relation(fields: [designerId], references: [id])
+
+  @@unique([name, designerId])
+  @@map("client_groups")
+}
+
+model ClientGroupMember {
+  groupId  String
+  clientId String
+  client   Client      @relation(fields: [clientId], references: [id])
+  group    ClientGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, clientId])
+  @@map("client_group_members")
+}
+
+model MeasurementShareLink {
+  id              String       @id @default(cuid())
+  token           String       @unique
+  expiresAt       DateTime
+  updateWindowEnd DateTime?
+  clientId        String
+  designerId      String
+  measurementId   String?      @unique
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  client          Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  designer        User         @relation(fields: [designerId], references: [id])
+  measurement     Measurement? @relation(fields: [measurementId], references: [id])
+
+  @@map("measurement_share_links")
+}
+
+enum Role {
+  CLIENT
+  DESIGNER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  DELETED
+}
+
+enum MeasurementUnit {
+  INCH
+  CENTIMETER
+}
+
+enum RecordStatus {
+  ACTIVE
+  DELETED
 }
 
 enum OrderStatus {
@@ -201,158 +357,6 @@ enum OrderStatus {
   COMPLETED
   DELIVERED
 }
-
-model Measurement {
-  id       String @id @default(cuid())
-  clientId String
-  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  // --- THIS IS THE KEY for your data privacy rule ---
-  // It tracks which designer/user created this specific measurement session.
-  // This structure is already perfect and does not need to change.
-  creatorId String
-  creator   User     @relation(fields: [creatorId], references: [id], onDelete: Restrict)
-
-  // Order details
-  orderStatus        OrderStatus  @default(ORDER_CONFIRMED)
-  status             RecordStatus @default(ACTIVE)
-  completionDeadline DateTime?
-  materialImageUrl   String?
-  designImageUrl     String?
-
-  // --- NEW: Link to MeasurementShareLink if this measurement was created via a share link ---
-  shareLink MeasurementShareLink?
-
-  // Vertical measurements (shoulder to various points) - Snug, Static, Dynamic
-  shoulderToChestSnug      Float?
-  shoulderToChestStatic    Float?
-  shoulderToChestDynamic   Float?
-
-  shoulderToBustSnug       Float?
-  shoulderToBustStatic     Float?
-  shoulderToBustDynamic    Float?
-
-  shoulderToUnderbustSnug  Float?
-  shoulderToUnderbustStatic Float?
-  shoulderToUnderbustDynamic Float?
-
-  shoulderToWaistFrontSnug Float?
-  shoulderToWaistFrontStatic Float?
-  shoulderToWaistFrontDynamic Float?
-
-  shoulderToWaistBackSnug  Float?
-  shoulderToWaistBackStatic Float?
-  shoulderToWaistBackDynamic Float?
-
-  waistToHipSnug           Float?
-  waistToHipStatic         Float?
-  waistToHipDynamic        Float?
-
-  shoulderToKneeSnug       Float?
-  shoulderToKneeStatic     Float?
-  shoulderToKneeDynamic    Float?
-
-  shoulderToDressLengthSnug Float?
-  shoulderToDressLengthStatic Float?
-  shoulderToDressLengthDynamic Float?
-
-  shoulderToAnkleSnug      Float?
-  shoulderToAnkleStatic    Float?
-  shoulderToAnkleDynamic   Float?
-
-  // Width measurements - Snug, Static, Dynamic
-  shoulderWidthSnug        Float?
-  shoulderWidthStatic      Float?
-  shoulderWidthDynamic     Float?
-
-  nippleToNippleSnug       Float?
-  nippleToNippleStatic     Float?
-  nippleToNippleDynamic    Float?
-
-  offShoulderSnug          Float?
-  offShoulderStatic        Float?
-  offShoulderDynamic       Float?
-
-  // Circumference measurements - Snug, Static, Dynamic
-  bustSnug                 Float?
-  bustStatic               Float?
-  bustDynamic              Float?
-
-  underBustSnug            Float?
-  underBustStatic          Float?
-  underBustDynamic         Float?
-
-  waistSnug                Float?
-  waistStatic              Float?
-  waistDynamic             Float?
-
-  hipSnug                  Float?
-  hipStatic                Float?
-  hipDynamic               Float?
-
-  thighSnug                Float?
-  thighStatic              Float?
-  thighDynamic             Float?
-
-  kneeSnug                 Float?
-  kneeStatic               Float?
-  kneeDynamic              Float?
-
-  ankleSnug                Float?
-  ankleStatic              Float?
-  ankleDynamic             Float?
-
-  neckSnug                 Float?
-  neckStatic               Float?
-  neckDynamic              Float?
-
-  // Arm measurements - Snug, Static, Dynamic
-  shirtSleeveSnug          Float?
-  shirtSleeveStatic        Float?
-  shirtSleeveDynamic       Float?
-
-  elbowLengthSnug          Float?
-  elbowLengthStatic        Float?
-  elbowLengthDynamic       Float?
-
-  longSleevesSnug          Float?
-  longSleevesStatic        Float?
-  longSleevesDynamic       Float?
-
-  aroundArmSnug            Float?
-  aroundArmStatic          Float?
-  aroundArmDynamic         Float?
-
-  elbowSnug                Float?
-  elbowStatic              Float?
-  elbowDynamic             Float?
-
-  wristSnug                Float?
-  wristStatic              Float?
-  wristDynamic             Float?
-
-  // Leg measurements - Snug, Static, Dynamic
-  inSeamSnug               Float?
-  inSeamStatic             Float?
-  inSeamDynamic            Float?
-
-  outSeamSnug              Float?
-  outSeamStatic            Float?
-  outSeamDynamic           Float?
-
-  // Session info
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // --- NEW: Finance relations ---
-  jobCostings JobCosting[]
-
-  @@index([creatorId])
-  @@map("measurements")
-}
-
-// --- NEW: FINANCE & INVENTORY MODELS ---
 
 enum FinanceCategoryType {
   MATERIAL
@@ -368,135 +372,5 @@ enum FinanceCategoryType {
 enum TransactionType {
   REVENUE
   EXPENSE
-}
-
-model FinanceCategory {
-  id          String              @id @default(cuid())
-  name        String
-  type        FinanceCategoryType
-  unit        String              @default("unit") // e.g., Yards, Pcs, Meters
-  usageCount  Int                 @default(0)
-  isGlobal    Boolean             @default(false)
-  
-  // Multi-tenancy: linked to a designer unless it's a global default
-  designerId  String?
-  designer    User?               @relation(fields: [designerId], references: [id])
-  
-  transactions Transaction[]
-  stock        InventoryStock?
-  
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-
-  @@unique([name, designerId, type])
-  @@map("finance_categories")
-}
-
-model InventoryStock {
-  id                String          @id @default(cuid())
-  categoryId        String          @unique
-  category          FinanceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  
-  designerId        String
-  designer          User            @relation(fields: [designerId], references: [id])
-  
-  currentQuantity   Float           @default(0)
-  lowStockThreshold Float           @default(0)
-  unitPriceAverage  Float           @default(0)
-  lastRestocked     DateTime?
-  
-  updatedAt         DateTime        @updatedAt
-
-  @@map("inventory_stocks")
-}
-
-model Transaction {
-  id              String          @id @default(cuid())
-  type            TransactionType
-  
-  categoryId      String
-  category        FinanceCategory @relation(fields: [categoryId], references: [id])
-  
-  designerId      String
-  designer        User            @relation(fields: [designerId], references: [id])
-  
-  amount          Float
-  quantity        Float           @default(1)
-  date            DateTime        @default(now())
-  notes           String?         @db.Text
-  receiptImageUrl String?
-  
-  // Job Costing (Multi-client allocation)
-  jobCostings     JobCosting[]
-  
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-
-  @@map("transactions")
-}
-
-model JobCosting {
-  id              String          @id @default(cuid())
-  transactionId   String
-  transaction     Transaction     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  
-  clientId        String
-  client          Client          @relation(fields: [clientId], references: [id])
-  
-  measurementId   String?
-  measurement     Measurement?    @relation(fields: [measurementId], references: [id])
-  
-  quantityUsed    Float           @default(0)
-  
-  createdAt       DateTime        @default(now())
-
-  @@map("job_costings")
-}
-
-model ClientGroup {
-  id              String          @id @default(cuid())
-  name            String
-  designerId      String
-  designer        User            @relation(fields: [designerId], references: [id])
-  
-  members         ClientGroupMember[]
-  
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-
-  @@unique([name, designerId])
-  @@map("client_groups")
-}
-
-model ClientGroupMember {
-  groupId         String
-  group           ClientGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  
-  clientId        String
-  client          Client          @relation(fields: [clientId], references: [id])
-
-  @@id([groupId, clientId])
-  @@map("client_group_members")
-}
-
-// --- NEW: Model for Sharable Measurement Links ---
-model MeasurementShareLink {
-  id              String    @id @default(cuid())
-  token           String    @unique
-  expiresAt       DateTime
-  updateWindowEnd DateTime? // Null until first submission, then set to (submission time + 2 hours)
-
-  clientId        String
-  client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  designerId      String
-  designer        User      @relation(fields: [designerId], references: [id], onDelete: Restrict)
-
-  measurementId   String?   @unique // Null until client submits, then links to the created measurement
-  measurement     Measurement? @relation(fields: [measurementId], references: [id], onDelete: SetNull) // SetNull if measurement is deleted
-
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@map("measurement_share_links")
+  USAGE
 }
