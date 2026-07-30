@@ -62,6 +62,9 @@ export default function FinanceSeedPage() {
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [clearing, setClearing] = useState(false);
 
+  // Progress while generation is streaming in: { completed, total, label }
+  const [progress, setProgress] = useState(null);
+
   useEffect(() => {
     fetchDesigners();
   }, []);
@@ -134,11 +137,17 @@ export default function FinanceSeedPage() {
 
   const preview = getPreviewData();
 
+  // Total number of "steps" the backend will report progress for: one setup
+  // step, plus one step per month across all configured years. Used as the
+  // starting total for the progress bar before the stream sends its own.
+  const estimatedTotalSteps = preview.months.length + 1;
+
   const handleGenerate = async () => {
     setConfirmDialog(null);
     setLoading(true);
     setError(null);
     setResult(null);
+    setProgress({ completed: 0, total: estimatedTotalSteps, label: "Starting…" });
 
     try {
       const res = await fetch("/api/admin/finance-seed", {
@@ -151,15 +160,58 @@ export default function FinanceSeedPage() {
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Generation failed");
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Generation failed");
+      }
 
-      setResult(data);
-      fetchDesigners();
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalResult = null;
+      let streamError = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop(); // last entry may be a partial line — keep it for next chunk
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          let msg;
+          try {
+            msg = JSON.parse(line);
+          } catch {
+            continue; // ignore malformed line rather than crashing the whole stream
+          }
+
+          if (msg.type === "progress") {
+            setProgress({ completed: msg.completed, total: msg.total, label: msg.label });
+          } else if (msg.type === "done") {
+            finalResult = { success: true, message: msg.message, summary: msg.summary };
+          } else if (msg.type === "error") {
+            streamError = msg.error;
+          }
+        }
+      }
+
+      if (streamError) throw new Error(streamError);
+      if (finalResult) {
+        setResult(finalResult);
+      } else {
+        throw new Error("Generation ended without a result — please check server logs");
+      }
+
+      await fetchDesigners();
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+      setProgress(null);
     }
   };
 
@@ -178,7 +230,7 @@ export default function FinanceSeedPage() {
       if (!res.ok) throw new Error(data.error || "Clear failed");
 
       setResult({ success: true, message: data.message, cleared: true });
-      fetchDesigners();
+      await fetchDesigners();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -202,6 +254,9 @@ export default function FinanceSeedPage() {
   };
 
   const selectedDesignerData = designers.find((d) => d.id === selectedDesigner);
+  const progressPercent = progress && progress.total > 0
+    ? Math.min(100, Math.round((progress.completed / progress.total) * 100))
+    : 0;
 
   return (
     <div className="min-h-screen pt-0 md:pt-20 pb-10 mb-24 px-4 sm:px-6 lg:px-8">
@@ -272,10 +327,10 @@ export default function FinanceSeedPage() {
                         <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
                         <div>
                           <p className="font-medium text-amber-600 dark:text-amber-400">
-                            This designer has {selectedDesignerData.transactionCount} existing transactions.
+                            This designer has {selectedDesignerData.transactionCount} transactions.
                           </p>
                           <p className="text-muted-foreground mt-1">
-                            Use &quot;Clear Data&quot; first to avoid duplicates.
+                            Generating new data will automatically clean up previous [SEED] data first. Real data will be preserved.
                           </p>
                         </div>
                       </motion.div>
@@ -559,7 +614,7 @@ export default function FinanceSeedPage() {
                   {loading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Generating... (this takes a minute)
+                      Generating... {progress ? `${progress.completed}/${progress.total}` : ""}
                     </>
                   ) : (
                     <>
@@ -568,6 +623,33 @@ export default function FinanceSeedPage() {
                     </>
                   )}
                 </button>
+
+                {/* Progress bar — visible only while generation is streaming in */}
+                <AnimatePresence>
+                  {loading && progress && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-1.5"
+                    >
+                      <div className="flex justify-between items-center text-xs text-muted-foreground gap-2">
+                        <span className="truncate">{progress.label}</span>
+                        <span className="font-mono font-medium shrink-0">
+                          {progress.completed}/{progress.total}
+                        </span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+                        <motion.div
+                          className="h-full bg-emerald-500 rounded-full"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${progressPercent}%` }}
+                          transition={{ duration: 0.25, ease: "easeOut" }}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 <button
                   onClick={() => setConfirmDialog("clear")}
@@ -692,7 +774,7 @@ export default function FinanceSeedPage() {
                       This will generate ~{preview.months.length * 15} transactions for{" "}
                       <span className="font-medium">{selectedDesignerData?.name}</span>{" "}
                       including 8 Ghanaian clients, revenue, expenses (rent, salaries, materials, utilities),
-                      and job costings. This may take about a minute.
+                      and job costings. This may take about a minute — you'll see a progress bar as it runs.
                     </>
                   ) : (
                     <>
