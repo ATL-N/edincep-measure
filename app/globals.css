@@ -2,64 +2,64 @@
 
 
 :root {
-  /* Light theme colors */
-  --background: 0 0% 90%;
-  --foreground: 222.2 84% 4.9%;
+  /* Light theme — warm neutral with teal accent */
+  --background: 40 10% 95%;
+  --foreground: 220 15% 15%;
   --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
+  --card-foreground: 220 15% 15%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222.2 84% 4.9%;
-  --primary: 262.1 83.3% 57.8%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 94%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --accent: 210 40% 96%;
-  --accent-foreground: 222.2 47.4% 11.2%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 214.3 31.8% 88%;
-  --input: 214.3 31.8% 94%;
-  --ring: 262.1 83.3% 57.8%;
+  --popover-foreground: 220 15% 15%;
+  --primary: 168 55% 38%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 40 15% 92%;
+  --secondary-foreground: 220 15% 20%;
+  --muted: 40 12% 93%;
+  --muted-foreground: 220 10% 46%;
+  --accent: 40 15% 92%;
+  --accent-foreground: 220 15% 20%;
+  --destructive: 0 65% 52%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 36 14% 86%;
+  --input: 36 14% 90%;
+  --ring: 168 55% 38%;
   --radius: 0.5rem;
   
   /* Custom brand colors */
-  --brand-primary: 262.1 83.3% 57.8%;
-  --brand-secondary: 280 100% 70%;
-  --brand-accent: 45 100% 70%;
-  --glass: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.3);
+  --brand-primary: 168 55% 38%;
+  --brand-secondary: 195 50% 42%;
+  --brand-accent: 32 80% 55%;
+  --glass: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(0, 0, 0, 0.06);
 }
 
 [data-theme="dark"] {
-  /* Dark theme colors */
-  --background: 222.2 84% 18%;
-  --foreground: 210 40% 90%;
-  --card: 217.2 32.6% 8%;
-  --card-foreground: 210 40% 98%;
-  --popover: 217.2 32.6% 8%;
-  --popover-foreground: 210 40% 98%;
-  --primary: 262.1 83.3% 57.8%;
-  --primary-foreground: 222.2 47.4% 11.2%;
-  --secondary: 217.2 32.6% 12%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217.2 32.6% 10%;
-  --muted-foreground: 215 20.2% 65.1%;
-  --accent: 217.2 32.6% 12%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 217.2 32.6% 15%;
-  --input: 217.2 32.6% 12%;
-  --ring: 262.1 83.3% 57.8%;
+  /* Dark theme — deep charcoal with teal accent */
+  --background: 225 15% 10%;
+  --foreground: 40 10% 90%;
+  --card: 225 14% 13%;
+  --card-foreground: 40 10% 92%;
+  --popover: 225 14% 13%;
+  --popover-foreground: 40 10% 92%;
+  --primary: 168 50% 48%;
+  --primary-foreground: 225 15% 8%;
+  --secondary: 225 12% 16%;
+  --secondary-foreground: 40 10% 90%;
+  --muted: 225 12% 15%;
+  --muted-foreground: 220 10% 55%;
+  --accent: 225 12% 16%;
+  --accent-foreground: 40 10% 90%;
+  --destructive: 0 55% 45%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 225 12% 18%;
+  --input: 225 12% 16%;
+  --ring: 168 50% 48%;
   
   /* Custom dark brand colors */
-  --brand-primary: 262.1 83.3% 67.8%;
-  --brand-secondary: 280 100% 80%;
-  --brand-accent: 45 100% 80%;
-  --glass: rgba(0, 0, 0, 0.4);
-  --glass-border: rgba(255, 255, 255, 0.1);
+  --brand-primary: 168 50% 48%;
+  --brand-secondary: 195 45% 52%;
+  --brand-accent: 32 75% 58%;
+  --glass: rgba(0, 0, 0, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.08);
 }
 
 * {
@@ -114,7 +114,7 @@ body {
 .gradient-text {
   background: linear-gradient(135deg, 
     hsl(var(--brand-primary)) 0%, 
-    hsl(var(--brand-secondary)) 100%);
+    hsl(var(--brand-accent)) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -122,20 +122,20 @@ body {
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(var(--muted));
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--brand-primary));
-  border-radius: 4px;
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--brand-secondary));
+  background: hsl(var(--muted-foreground) / 0.5);
 }
 
 /* Animations */
@@ -174,7 +174,7 @@ body {
   background: linear-gradient(
     90deg,
     transparent,
-    hsl(var(--brand-primary) / 0.2),
+    hsl(var(--brand-primary) / 0.15),
     transparent
   );
   background-size: 200% 100%;

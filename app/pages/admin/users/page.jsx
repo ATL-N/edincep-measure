@@ -11,6 +11,7 @@ import {
   Loader2,
   AlertCircle,
   Edit,
+  Eye,
   Search,
   ChevronUp,
   ChevronDown,
@@ -18,6 +19,7 @@ import {
   ChevronsRight,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 // A simple debounce hook
 const useDebounce = (value, delay) => {
@@ -291,7 +293,10 @@ export default function UsersPage() {
                             <button onClick={handleCancelEdit} className="p-2 rounded-full bg-gray-500/10 text-gray-400 hover:bg-gray-500/20 transition-colors" title="Cancel"><UserX className="w-5 h-5" /></button>
                           </div>
                         ) : (
-                          <button onClick={() => handleEditClick(user)} className="p-2 rounded-full bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-colors" title="Edit User"><Edit className="w-5 h-5" /></button>
+                          <div className="flex space-x-2">
+                            <Link href={`/pages/admin/users/${user.id}`} className="p-2 rounded-full bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors" title="View Details"><Eye className="w-5 h-5" /></Link>
+                            <button onClick={() => handleEditClick(user)} className="p-2 rounded-full bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-colors" title="Edit User"><Edit className="w-5 h-5" /></button>
+                          </div>
                         )}
                       </td>
                     </tr>

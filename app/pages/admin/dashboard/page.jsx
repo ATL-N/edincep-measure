@@ -3,7 +3,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { BarChart2, Users, FileText } from "lucide-react";
+import { BarChart2, Users, FileText, Database } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -25,6 +25,12 @@ const adminSections = [
     description: "Browse system and application logs.",
     href: "/pages/admin/logs",
     icon: <FileText className="w-8 h-8 mb-4 text-green-500" />,
+  },
+  {
+    title: "Finance Seed Tool",
+    description: "Generate realistic financial data for designers. Seed transactions, expenses, and client links.",
+    href: "/pages/admin/finance-seed",
+    icon: <Database className="w-8 h-8 mb-4 text-amber-500" />,
   },
 ];
 
