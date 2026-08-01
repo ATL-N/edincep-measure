@@ -462,6 +462,46 @@ export async function POST(req) {
           "Sewing Machine": await ensureCategory("Sewing Machine", "TOOL", "unit"),
         };
 
+        // Track live stock state in memory during seed generation
+        // categoryName -> { categoryId, currentQuantity, unitPriceAverage, lowStockThreshold, lastRestocked }
+        const stockTracker = {};
+        for (const [name, cat] of Object.entries(expenseCats)) {
+          if (cat.type === "MATERIAL" || cat.type === "TOOL") {
+            stockTracker[name] = {
+              categoryId: cat.id,
+              currentQuantity: 0,
+              unitPriceAverage: 0,
+              lowStockThreshold: cat.type === "MATERIAL" ? 5 : 2,
+              lastRestocked: null,
+            };
+          }
+        }
+
+        // Helper to update stock when materials/tools are purchased (EXPENSE)
+        const recordStockPurchase = (catName, quantity, totalAmount, date) => {
+          const tracker = stockTracker[catName];
+          if (!tracker) return;
+          const oldQty = tracker.currentQuantity;
+          const oldAvg = tracker.unitPriceAverage;
+          const newQty = oldQty + quantity;
+
+          let newAvg = oldAvg;
+          if (newQty > 0) {
+            newAvg = ((oldQty * oldAvg) + totalAmount) / newQty;
+          }
+
+          tracker.currentQuantity = round2(newQty);
+          tracker.unitPriceAverage = round2(newAvg);
+          tracker.lastRestocked = date;
+        };
+
+        // Helper to record stock consumption when materials/tools are used for orders (USAGE)
+        const recordStockUsage = (catName, quantity) => {
+          const tracker = stockTracker[catName];
+          if (!tracker) return;
+          tracker.currentQuantity = Math.max(0, round2(tracker.currentQuantity - quantity));
+        };
+
         // 3. Create or find Ghanaian clients
         let clients = [];
         if (createClients) {
@@ -616,9 +656,11 @@ export async function POST(req) {
           totalExpenses: 0,
           transactionsCreated: 0,
           jobCostingsCreated: 0,
+          usageTransactionsCreated: 0,
           clientsCreated: clients.length,
           measurementsCreated,
           monthlyBreakdown: [],
+          finalStockLevels: {},
         };
 
         for (const [yearStr, yearConfig] of Object.entries(targets)) {
@@ -648,8 +690,62 @@ export async function POST(req) {
 
             const monthResult = { year, month, revenue: 0, expenses: 0, revenueCount: 0, expenseCount: 0 };
 
-            // ── REVENUE: only a subset of days in the month have orders ────────
-            // Slow month ≈ daysInMonth * 0.20, busy month ≈ daysInMonth * 0.70
+            // ── EXPENSE: MATERIALS — restock trips (Run BEFORE order processing so stock exists) ──
+            {
+              const materialBudget = monthExpenseTotal * EXPENSE_SPLITS.materials * (isSlowMonth ? 0.5 : 1);
+              const numEvents = isBusyMonth ? randomInt(2, 3) : (isSlowMonth ? randomInt(0, 1) : randomInt(1, 2));
+
+              if (numEvents > 0 && materialBudget > 10) {
+                const eventDays = pickSpacedDays(daysInMonth, numEvents, 6);
+                const rawEventWeights = eventDays.map((_, i) => (i === 0 ? 1.4 : 1.0));
+                const totalEventWeight = rawEventWeights.reduce((a, b) => a + b, 0);
+                const materialCatNames = Object.keys(MATERIAL_WEIGHTS);
+
+                for (let ei = 0; ei < eventDays.length; ei++) {
+                  const day = eventDays[ei];
+                  const eventBudget = materialBudget * (rawEventWeights[ei] / totalEventWeight);
+                  const numTypes = randomInt(2, Math.min(4, materialCatNames.length));
+                  const shuffled = [...materialCatNames].sort(() => Math.random() - 0.5);
+                  const chosenTypes = shuffled.slice(0, numTypes);
+                  const chosenWeightTotal = chosenTypes.reduce((s, t) => s + MATERIAL_WEIGHTS[t], 0);
+
+                  for (const catName of chosenTypes) {
+                    const cat = expenseCats[catName];
+                    const range = EXPENSE_RANGES[catName];
+                    const share = eventBudget * (MATERIAL_WEIGHTS[catName] / chosenWeightTotal);
+                    const amount = roundMoney(clamp(share, range.min, range.max * 2));
+                    if (amount < 3) continue;
+
+                    const date = dateOnDay(year, month, day);
+                    const qty = Math.max(1, randomInt(2, Math.ceil(amount / (range.min || 1))));
+
+                    await prisma.transaction.create({
+                      data: {
+                        type: "EXPENSE",
+                        categoryId: cat.id,
+                        designerId: designer.id,
+                        amount,
+                        quantity: qty,
+                        date,
+                        notes: `[SEED] Restock ${catName} (${qty} ${cat.unit})`,
+                      },
+                    });
+
+                    recordStockPurchase(catName, qty, amount, date);
+
+                    await prisma.financeCategory.update({
+                      where: { id: cat.id },
+                      data: { usageCount: { increment: 1 } },
+                    });
+                    monthResult.expenses += amount;
+                    monthResult.expenseCount++;
+                    summary.transactionsCreated++;
+                  }
+                }
+              }
+            }
+
+            // ── REVENUE & MATERIAL USAGE PER ORDER ──────────────────────────────────────────
             const numActiveDays = Math.max(3, Math.round(daysInMonth * (0.18 + 0.52 * activityLevel)));
             const activeDays = pickActiveDays(daysInMonth, numActiveDays);
 
@@ -686,19 +782,53 @@ export async function POST(req) {
                 },
               });
 
+              let linkedMeasId = null;
               if (Math.random() < 0.75 && linkedClient) {
                 const clientMeasIds = clientMeasurements[linkedClient.id] || [];
-                const linkedMeasId = clientMeasIds.length > 0 ? randomChoice(clientMeasIds) : null;
+                linkedMeasId = clientMeasIds.length > 0 ? randomChoice(clientMeasIds) : null;
+              }
 
+              // Determine material usage depending on order type
+              let materialType = "Lace";
+              let qtyUsed = 2.0;
+              if (order.catName === "Custom Made") {
+                materialType = randomChoice(["Lace", "Thread", "Beads"]);
+                qtyUsed = materialType === "Lace" ? round2(randomBetween(2.5, 4.5)) : (materialType === "Thread" ? 1.0 : round2(randomBetween(1.0, 2.0)));
+              } else if (order.catName === "Ready-to-Wear") {
+                materialType = randomChoice(["Lace", "Thread", "Zip"]);
+                qtyUsed = materialType === "Lace" ? round2(randomBetween(1.5, 3.0)) : 1.0;
+              } else {
+                materialType = randomChoice(["Thread", "Zip", "Buttons"]);
+                qtyUsed = materialType === "Buttons" ? randomInt(2, 6) : 1.0;
+              }
+
+              const matCat = expenseCats[materialType];
+              if (matCat && linkedClient) {
+                // Record JobCosting
                 await prisma.jobCosting.create({
                   data: {
                     transactionId: tx.id,
                     clientId: linkedClient.id,
                     measurementId: linkedMeasId,
-                    quantityUsed: 0,
+                    quantityUsed: qtyUsed,
                   },
                 });
                 summary.jobCostingsCreated++;
+
+                // Record USAGE Transaction
+                await prisma.transaction.create({
+                  data: {
+                    type: "USAGE",
+                    categoryId: matCat.id,
+                    designerId: designer.id,
+                    amount: 0,
+                    quantity: qtyUsed,
+                    date,
+                    notes: `[SEED] Consumed ${qtyUsed} ${matCat.unit} of ${materialType} for ${linkedClient.name}`,
+                  },
+                });
+                summary.usageTransactionsCreated++;
+                recordStockUsage(materialType, qtyUsed);
               }
 
               await prisma.financeCategory.update({
@@ -711,7 +841,7 @@ export async function POST(req) {
               summary.transactionsCreated++;
             }
 
-            // ── EXPENSE: RENT (fixed monthly, single payment) ──────────────────
+            // ── EXPENSE: RENT ──
             {
               const rentAmount = roundMoney(monthExpenseTotal * EXPENSE_SPLITS.rent);
               const rentDate = dateOnDay(year, month, randomInt(1, 3), 9, 10);
@@ -735,7 +865,7 @@ export async function POST(req) {
               summary.transactionsCreated++;
             }
 
-            // ── EXPENSE: DESIGNER SALARY (monthly draw, single payment) ────────
+            // ── EXPENSE: DESIGNER SALARY ──
             {
               const salaryAmount = roundMoney(monthExpenseTotal * EXPENSE_SPLITS.designerSalary);
               const salaryDate = dateOnDay(year, month, randomInt(25, Math.min(28, daysInMonth)), 15, 17);
@@ -759,9 +889,7 @@ export async function POST(req) {
               summary.transactionsCreated++;
             }
 
-            // ── EXPENSE: TEMPORARY HANDS — clustered into 1-2 short bursts ─────
-            // (a few consecutive days when extra help is brought on for a rush
-            // order), not a payment scattered evenly across the month.
+            // ── EXPENSE: TEMPORARY HANDS ──
             {
               let tempBudget = monthExpenseTotal * EXPENSE_SPLITS.tempLabour;
               if (isSlowMonth) tempBudget *= 0.2;
@@ -809,68 +937,7 @@ export async function POST(req) {
               }
             }
 
-            // ── EXPENSE: MATERIALS — restock trips, not daily purchases ────────
-            // 0-3 bulk-buy events per month, spaced at least a week apart. Each
-            // event buys 2-4 material types together. Between events: nothing.
-            {
-              const materialBudget = monthExpenseTotal * EXPENSE_SPLITS.materials * (isSlowMonth ? 0.5 : 1);
-              const numEvents = isBusyMonth ? randomInt(2, 3) : (isSlowMonth ? randomInt(0, 1) : randomInt(1, 2));
-
-              if (numEvents > 0 && materialBudget > 10) {
-                const eventDays = pickSpacedDays(daysInMonth, numEvents, 6);
-                // First restock trip tends to be the biggest (stocking up), later
-                // ones are smaller top-ups.
-                const rawEventWeights = eventDays.map((_, i) => (i === 0 ? 1.4 : 1.0));
-                const totalEventWeight = rawEventWeights.reduce((a, b) => a + b, 0);
-
-                const materialCatNames = Object.keys(MATERIAL_WEIGHTS);
-
-                for (let ei = 0; ei < eventDays.length; ei++) {
-                  const day = eventDays[ei];
-                  const eventBudget = materialBudget * (rawEventWeights[ei] / totalEventWeight);
-
-                  // Pick 2-4 material types for this particular shopping trip
-                  const numTypes = randomInt(2, Math.min(4, materialCatNames.length));
-                  const shuffled = [...materialCatNames].sort(() => Math.random() - 0.5);
-                  const chosenTypes = shuffled.slice(0, numTypes);
-                  const chosenWeightTotal = chosenTypes.reduce((s, t) => s + MATERIAL_WEIGHTS[t], 0);
-
-                  for (const catName of chosenTypes) {
-                    const cat = expenseCats[catName];
-                    const range = EXPENSE_RANGES[catName];
-                    const share = eventBudget * (MATERIAL_WEIGHTS[catName] / chosenWeightTotal);
-                    const amount = roundMoney(clamp(share, range.min, range.max * 2));
-                    if (amount < 3) continue;
-
-                    const date = dateOnDay(year, month, day);
-                    const qty = Math.max(1, randomInt(1, Math.ceil(amount / range.min)));
-
-                    await prisma.transaction.create({
-                      data: {
-                        type: "EXPENSE",
-                        categoryId: cat.id,
-                        designerId: designer.id,
-                        amount,
-                        quantity: qty,
-                        date,
-                        notes: `[SEED] ${randomChoice(EXPENSE_NOTES[catName])}`,
-                      },
-                    });
-                    await prisma.financeCategory.update({
-                      where: { id: cat.id },
-                      data: { usageCount: { increment: 1 } },
-                    });
-                    monthResult.expenses += amount;
-                    monthResult.expenseCount++;
-                    summary.transactionsCreated++;
-                  }
-                }
-              }
-              // else: designer worked from existing stock this month — no
-              // material purchases at all, which is realistic.
-            }
-
-            // ── EXPENSE: ELECTRICITY (monthly, single payment) ─────────────────
+            // ── EXPENSE: ELECTRICITY ──
             {
               const elecAmount = roundMoney(monthExpenseTotal * EXPENSE_SPLITS.electricity);
               const elecDate = dateOnDay(year, month, randomInt(12, Math.min(20, daysInMonth)), 9, 12);
@@ -894,7 +961,7 @@ export async function POST(req) {
               summary.transactionsCreated++;
             }
 
-            // ── EXPENSE: WATER (monthly, single payment) ───────────────────────
+            // ── EXPENSE: WATER ──
             {
               const waterAmount = roundMoney(monthExpenseTotal * EXPENSE_SPLITS.water);
               const waterDate = dateOnDay(year, month, randomInt(10, Math.min(18, daysInMonth)), 10, 13);
@@ -918,7 +985,7 @@ export async function POST(req) {
               summary.transactionsCreated++;
             }
 
-            // ── EXPENSE: MARKETING (occasional, single payment when it happens)
+            // ── EXPENSE: MARKETING ──
             {
               const marketingChance = isBusyMonth ? 0.7 : (isSlowMonth ? 0.2 : 0.4);
               if (Math.random() < marketingChance) {
@@ -950,7 +1017,7 @@ export async function POST(req) {
               }
             }
 
-            // ── EXPENSE: TOOLS (rare, single payment when it happens) ──────────
+            // ── EXPENSE: TOOLS ──
             if (Math.random() < 0.20) {
               const toolBudget = monthExpenseTotal * EXPENSE_SPLITS.tools;
               const chosenTool = randomChoice(["Needles", "Scissors", "Sewing Machine"]);
@@ -960,6 +1027,7 @@ export async function POST(req) {
                 const range = EXPENSE_RANGES[chosenTool];
                 const amount = roundMoney(Math.min(toolBudget, randomBetween(range.min, range.max)));
                 const date = randomDateInMonth(year, month);
+                const qty = 1;
 
                 await prisma.transaction.create({
                   data: {
@@ -967,11 +1035,14 @@ export async function POST(req) {
                     categoryId: toolCat.id,
                     designerId: designer.id,
                     amount,
-                    quantity: 1,
+                    quantity: qty,
                     date,
                     notes: `[SEED] ${randomChoice(EXPENSE_NOTES[chosenTool])}`,
                   },
                 });
+
+                recordStockPurchase(chosenTool, qty, amount, date);
+
                 await prisma.financeCategory.update({
                   where: { id: toolCat.id },
                   data: { usageCount: { increment: 1 } },
@@ -1000,11 +1071,40 @@ export async function POST(req) {
             });
             console.log(
               `Finance Seed [${designer.name}]: (${completedSteps}/${totalSteps}) ${monthLabel} done — ` +
-              `revenue ${monthResult.revenue}, expenses ${monthResult.expenses}, ` +
-              `${monthResult.revenueCount} revenue txns, ${monthResult.expenseCount} expense txns`
+              `revenue ${monthResult.revenue}, expenses ${monthResult.expenses}`
             );
           }
         }
+
+        // 6. Upsert calculated InventoryStock records into Prisma DB
+        let stocksUpdatedCount = 0;
+        for (const [name, stock] of Object.entries(stockTracker)) {
+          if (stock.lastRestocked || stock.currentQuantity > 0) {
+            await prisma.inventoryStock.upsert({
+              where: { categoryId: stock.categoryId },
+              update: {
+                currentQuantity: stock.currentQuantity,
+                unitPriceAverage: stock.unitPriceAverage,
+                lowStockThreshold: stock.lowStockThreshold,
+                lastRestocked: stock.lastRestocked || new Date(),
+              },
+              create: {
+                categoryId: stock.categoryId,
+                designerId: designer.id,
+                currentQuantity: stock.currentQuantity,
+                unitPriceAverage: stock.unitPriceAverage,
+                lowStockThreshold: stock.lowStockThreshold,
+                lastRestocked: stock.lastRestocked || new Date(),
+              },
+            });
+            stocksUpdatedCount++;
+            summary.finalStockLevels[name] = {
+              qty: stock.currentQuantity,
+              avgPrice: stock.unitPriceAverage,
+            };
+          }
+        }
+        summary.stocksUpdatedCount = stocksUpdatedCount;
 
         summary.totalRevenue = round2(summary.totalRevenue);
         summary.totalExpenses = round2(summary.totalExpenses);
@@ -1013,13 +1113,12 @@ export async function POST(req) {
 
         console.log(
           `Finance Seed [${designer.name}]: complete — ${summary.transactionsCreated} transactions, ` +
-          `GHS ${summary.totalRevenue} revenue, GHS ${summary.totalExpenses} expenses, ` +
-          `GHS ${summary.netProfit} net profit`
+          `${summary.usageTransactionsCreated} usage records, ${stocksUpdatedCount} inventory stocks updated.`
         );
 
         send({
           type: "done",
-          message: `Generated ${summary.transactionsCreated} transactions for ${designer.name}`,
+          message: `Generated ${summary.transactionsCreated} transactions and updated ${stocksUpdatedCount} stock levels for ${designer.name}`,
           summary,
         });
       } catch (error) {
