@@ -14,6 +14,7 @@ import {
   SunIcon,
   MoonIcon,
   DocumentTextIcon,
+  CircleStackIcon,
   ArrowDownOnSquareIcon as LogOutIcon,
 } from "@heroicons/react/24/outline";
 import {
@@ -23,6 +24,7 @@ import {
   ChartBarIcon as ChartBarIconSolid,
   CogIcon as CogIconSolid,
   DocumentTextIcon as DocumentTextIconSolid,
+  CircleStackIcon as CircleStackIconSolid,
 } from "@heroicons/react/24/solid";
 
 const getNavigation = (role) => {
@@ -52,6 +54,12 @@ const getNavigation = (role) => {
           href: "/pages/admin/logs",
           icon: DocumentTextIcon,
           iconSolid: DocumentTextIconSolid,
+        },
+        {
+          name: "Backup",
+          href: "/pages/admin/backup",
+          icon: CircleStackIcon,
+          iconSolid: CircleStackIconSolid,
         },
         {
           name: "Free",
@@ -156,6 +164,13 @@ const getMobileNavigation = (role) => {
           icon: DocumentTextIcon,
           iconSolid: DocumentTextIconSolid,
           label: "Logs",
+        },
+        {
+          name: "Backup",
+          href: "/pages/admin/backup",
+          icon: CircleStackIcon,
+          iconSolid: CircleStackIconSolid,
+          label: "Backup",
         },
         {
           name: "Settings",

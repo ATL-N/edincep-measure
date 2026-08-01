@@ -4,13 +4,27 @@ import { prisma } from "@/app/lib/prisma";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { sendSms } from "@/app/lib/sms";
+import { isRateLimited } from "@/app/lib/rate-limiter";
 
 export async function POST(req) {
   try {
     const { phone } = await req.json();
 
-    if (!phone) {
-      return NextResponse.json({ error: "Phone number is required." }, { status: 400 });
+    if (!phone || typeof phone !== "string" || !/^\+?[0-9]{7,15}$/.test(phone.replace(/[\s-]/g, ""))) {
+      return NextResponse.json({ error: "A valid phone number is required." }, { status: 400 });
+    }
+
+    // Throttle SMS sending: per phone number and per IP.
+    const ip = (req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown").split(",")[0].trim();
+    const [perPhone, perIp] = await Promise.all([
+      isRateLimited(`otp_req:phone:${phone}`, 3, 10 * 60),
+      isRateLimited(`otp_req:ip:${ip}`, 10, 60 * 60),
+    ]);
+    if (perPhone.isLimited || perIp.isLimited) {
+      return NextResponse.json(
+        { error: "Too many code requests. Please wait a few minutes and try again." },
+        { status: 429 }
+      );
     }
 
     // 1. Find or create the user

@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { MeasurementGuideButton, MeasurementGuideBanner } from "@/components/MeasurementGuide";
+import PhotoMeasure, { cmToUnit, uploadPhotos } from "@/components/PhotoMeasure";
+import { Camera } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -123,6 +126,28 @@ export default function MeasurementFormPage() {
   // --- Unit Conversion Logic ---
   const measurementUnit = session?.user?.measurementUnit || "INCH";
   const displayUnitLabel = measurementUnit === "CENTIMETER" ? "cm" : "in";
+
+  // Measure from photos (opened directly with ?photos=1, e.g. from the app).
+  const [showPhotoMeasure, setShowPhotoMeasure] = useState(
+    () => !sessionId && searchParams.get("photos") === "1"
+  );
+  const [photoCapture, setPhotoCapture] = useState(null);
+
+  const applyPhotoEstimates = ({ valuesCm, photos, heightCm }) => {
+    // Same convention as the client form: estimate = snug,
+    // static/dynamic ±0.5 in (1.25 cm) around it.
+    const offset = measurementUnit === "CENTIMETER" ? 1.25 : 0.5;
+    const filled = {};
+    for (const [key, cm] of Object.entries(valuesCm)) {
+      const v = cmToUnit(cm, measurementUnit);
+      filled[`${key}Snug`] = String(v);
+      filled[`${key}Static`] = String(Math.max(0, v - offset));
+      filled[`${key}Dynamic`] = String(v + offset);
+    }
+    setMeasurements((prev) => ({ ...prev, ...filled }));
+    setPhotoCapture({ photos, heightCm });
+    setShowPhotoMeasure(false);
+  };
 
   const convertToDisplay = (valueInInches) => {
     if (valueInInches === null || valueInInches === undefined || valueInInches === "") return "";
@@ -260,9 +285,19 @@ export default function MeasurementFormPage() {
         }
       }
 
+      let photoIds = [];
+      if (!isEditMode && photoCapture?.photos?.length) {
+        try {
+          photoIds = await uploadPhotos(photoCapture.photos, `/api/clients/${clientId}/photos`);
+        } catch (e) {
+          console.warn("Photo upload failed; saving without photos", e);
+        }
+      }
+
       const body = {
         notes,
         ...storageMeasurements,
+        ...(photoIds.length ? { photoIds } : {}),
         orderStatus: orderStatus,
         completionDeadline,
         materialImageUrl: finalMaterialImageUrl,
@@ -447,6 +482,26 @@ export default function MeasurementFormPage() {
         </motion.div>
 
         <div className="space-y-6">
+          {!sessionId && (
+            <button
+              type="button"
+              onClick={() => setShowPhotoMeasure(true)}
+              className="mb-3 w-full flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-left hover:bg-primary/15 transition-colors"
+            >
+              <Camera className="w-6 h-6 text-primary shrink-0" aria-hidden />
+              <span className="flex-1">
+                <span className="block font-semibold">
+                  {photoCapture ? "Retake photos" : "Measure from 2 photos (beta)"}
+                </span>
+                <span className="block text-sm text-muted-foreground">
+                  {photoCapture
+                    ? "Estimated values are filled in below. Check them before saving."
+                    : "Take a front and side photo of the client to fill in most measurements."}
+                </span>
+              </span>
+            </button>
+          )}
+          <MeasurementGuideBanner className="mb-4" />
           {Object.entries(measurementCategories).map(
             ([categoryKey, category]) => (
               <div
@@ -503,7 +558,10 @@ export default function MeasurementFormPage() {
                                 className="border-b border-border/30 last:border-b-0"
                               >
                                 <td className="py-3 px-2 font-medium text-sm">
-                                  {name}
+                                  <span className="inline-flex items-center gap-1">
+                                    {name}
+                                    <MeasurementGuideButton fieldKey={fieldName} label={name} />
+                                  </span>
                                 </td>
                                 {["snug", "static", "dynamic"].map((type) => {
                                   const fullFieldName = `${fieldName}${
@@ -578,6 +636,13 @@ export default function MeasurementFormPage() {
           </motion.button>
         </div>
       </motion.div>
+      {showPhotoMeasure && (
+        <PhotoMeasure
+          unit={measurementUnit}
+          onApply={applyPhotoEstimates}
+          onClose={() => setShowPhotoMeasure(false)}
+        />
+      )}
     </div>
   );
 }

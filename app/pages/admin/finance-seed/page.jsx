@@ -722,6 +722,12 @@ export default function FinanceSeedPage() {
                               <p>📊 Margin: <span className="font-mono font-medium">{result.summary.overallMargin}%</span></p>
                               <p>👥 Clients: <span className="font-mono font-medium">{result.summary.clientsCreated}</span></p>
                               <p>🔗 Job Links: <span className="font-mono font-medium">{result.summary.jobCostingsCreated}</span></p>
+                              {result.summary.usageTransactionsCreated > 0 && (
+                                <p>🧵 Material Usages: <span className="font-mono font-medium">{result.summary.usageTransactionsCreated}</span></p>
+                              )}
+                              {result.summary.stocksUpdatedCount > 0 && (
+                                <p>📦 Inventory Stocks Updated: <span className="font-mono font-medium text-emerald-600">{result.summary.stocksUpdatedCount} items</span></p>
+                              )}
                             </div>
                           )}
                         </div>

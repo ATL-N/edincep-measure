@@ -8,7 +8,10 @@ import { isRateLimited } from "@/app/lib/rate-limiter";
 import { sendSms } from "@/app/lib/sms";
 
 // Initialize Resend with the API key from environment variables
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Created on first use (not at import time) so the app can be built without
+// secrets present; RESEND_API_KEY is provided at runtime via docker-compose.
+let resendClient;
+const getResend = () => (resendClient ??= new Resend(process.env.RESEND_API_KEY));
 const fromEmail = process.env.FROM_EMAIL || 'onboarding@resend.dev';
 
 
@@ -75,7 +78,7 @@ export async function POST(req) {
         }
         const appDomain = process.env.DOMAIN || 'localhost:3000';
         const resetLink = `https://${appDomain}/reset-password?email=${encodeURIComponent(user.email)}`;
-        await resend.emails.send({
+        await getResend().emails.send({
             from: fromEmail,
             to: user.email,
             subject: "Your Password Reset Code",

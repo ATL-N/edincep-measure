@@ -26,6 +26,8 @@ model User {
   otpExpires                DateTime?
   accounts                  Account[]
   sessions                  Session[]
+  deviceTokens              DeviceToken[]
+  designs                   Design[]
   assignedClients           ClientDesigner[]
   clientGroups              ClientGroup[]
   clientProfile             Client?                @relation("ClientUser")
@@ -89,6 +91,8 @@ model ClientDesigner {
   clientId   String
   designerId String
   assignedAt DateTime @default(now())
+  /// Private notes this designer keeps about a (possibly shared) client.
+  notes      String?
   client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   designer   User     @relation(fields: [designerId], references: [id], onDelete: Cascade)
 
@@ -114,6 +118,7 @@ model Client {
   jobCostings       JobCosting[]
   shareLinks        MeasurementShareLink[]
   measurements      Measurement[]
+  photos            MeasurementPhoto[]
 
   @@index([name])
   @@map("clients")
@@ -217,6 +222,7 @@ model Measurement {
   status                       RecordStatus          @default(ACTIVE)
   jobCostings                  JobCosting[]
   shareLink                    MeasurementShareLink?
+  photos                       MeasurementPhoto[]
   client                       Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
   creator                      User                  @relation(fields: [creatorId], references: [id])
 
@@ -326,6 +332,7 @@ model MeasurementShareLink {
   client          Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
   designer        User         @relation(fields: [designerId], references: [id])
   measurement     Measurement? @relation(fields: [measurementId], references: [id])
+  photos          MeasurementPhoto[]
 
   @@map("measurement_share_links")
 }
@@ -373,4 +380,76 @@ enum TransactionType {
   REVENUE
   EXPENSE
   USAGE
+}
+
+/// Long-lived, rotating "remember this device" token used to silently renew
+/// the short-lived NextAuth session. Only a SHA-256 hash is stored.
+model DeviceToken {
+  id         String    @id @default(cuid())
+  userId     String
+  /// All tokens rotated from the same login share a family; reuse of an old
+  /// token revokes the whole family (token theft detection).
+  familyId   String
+  tokenHash  String    @unique
+  deviceName String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("device_tokens")
+}
+
+/// Body photos used to estimate measurements (front / side). Stored privately
+/// in object storage; only served through an authenticated API route.
+model MeasurementPhoto {
+  id            String                @id @default(cuid())
+  clientId      String
+  /// Set once the photos are attached to a saved measurement.
+  measurementId String?
+  /// Set when the client uploaded through a share link.
+  shareLinkId   String?
+  /// Set when a designer uploaded it themselves.
+  uploadedById  String?
+  /// FRONT or SIDE
+  kind          String
+  storageKey    String
+  contentType   String
+  width         Int?
+  height        Int?
+  /// What the estimator saw: height used, detected levels and widths, the
+  /// estimated values, so a designer can check where a number came from.
+  analysis      Json?
+  createdAt     DateTime              @default(now())
+  client        Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  measurement   Measurement?          @relation(fields: [measurementId], references: [id], onDelete: Cascade)
+  shareLink     MeasurementShareLink? @relation(fields: [shareLinkId], references: [id], onDelete: SetNull)
+
+  @@index([measurementId])
+  @@index([shareLinkId])
+  @@index([clientId])
+  @@map("measurement_photos")
+}
+
+/// A garment design from the app's Design tab (options stored as JSON).
+/// clientId / measurementId are plain ids (not foreign keys) because the app
+/// may create a design before its client or measurement has synced.
+model Design {
+  id            String    @id
+  designerId    String
+  clientId      String?
+  measurementId String?
+  name          String
+  config        Json
+  createdAt     DateTime
+  updatedAt     DateTime
+  deletedAt     DateTime?
+  designer      User      @relation(fields: [designerId], references: [id], onDelete: Cascade)
+
+  @@index([designerId])
+  @@index([measurementId])
+  @@map("designs")
 }

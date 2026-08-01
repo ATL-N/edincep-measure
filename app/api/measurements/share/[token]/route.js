@@ -1,6 +1,8 @@
 // app/api/measurements/share/[token]/route.js
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { isMeasurementField } from "@/lib/measurement-fields";
+import { attachPhotos } from "@/lib/photo-storage";
 import { sendSms } from "@/app/lib/sms"; // Import the SMS utility
 
 // Helper to convert display names to camelCase DB fields
@@ -120,7 +122,8 @@ export async function POST(req, { params }) {
 
     // 3. Get the data from the request body
     const body = await req.json();
-    const { notes, ...incomingData } = body;
+    const { notes: rawNotes, photoIds, ...incomingData } = body;
+    const notes = typeof rawNotes === "string" ? rawNotes.slice(0, 2000) : undefined;
 
     // Process measurement data to ensure Snug, Static, and Dynamic are all populated
     // This maintains consistency with how the Flutter app saves data.
@@ -134,8 +137,12 @@ export async function POST(req, { params }) {
         else if (key.endsWith('Snug')) baseName = key.replace('Snug', '');
         else if (key.endsWith('Dynamic')) baseName = key.replace('Dynamic', '');
 
-        // Standardize: Populate the Trio
+        // Only accept real measurement columns with sane numeric values.
+        if (!isMeasurementField(`${baseName}Snug`)) return;
         const numValue = parseFloat(value);
+        if (!Number.isFinite(numValue) || numValue < 0 || numValue > 1000) return;
+
+        // Standardize: Populate the Trio
         measurementData[`${baseName}Snug`] = numValue;
         measurementData[`${baseName}Static`] = numValue - 0.5;
         measurementData[`${baseName}Dynamic`] = numValue + 0.5;
@@ -188,6 +195,9 @@ export async function POST(req, { params }) {
         await sendSms(shareLink.client.phone, smsMessage);
       }
     }
+
+    // Photos the client took while filling the form (estimate from photos).
+    await attachPhotos(photoIds, resultMeasurement.id, { shareLinkId: shareLink.id });
 
     return NextResponse.json({ message, measurementId: resultMeasurement.id }, { status: 200 });
 

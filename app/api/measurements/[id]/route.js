@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/app/lib/prisma.js";
+import { requireStaff, canAccessClient } from "@/lib/authz";
+import { isMeasurementField } from "@/lib/measurement-fields";
 
 // Helper to get IP and OS from request
 const getClientInfo = (request) => {
@@ -13,6 +15,9 @@ const getClientInfo = (request) => {
 // GET single measurement
 export async function GET(request, { params }) {
   try {
+    const { user, error } = await requireStaff(request, { requireActive: false });
+    if (error) return error;
+
     const awaitedparam = await params;
     const { id } = awaitedparam;
 
@@ -30,7 +35,12 @@ export async function GET(request, { params }) {
       },
     });
 
-    if (!measurement) {
+    const allowed =
+      measurement &&
+      (user.role === "ADMIN" ||
+        (measurement.creatorId === user.id && (await canAccessClient(user, measurement.clientId))));
+
+    if (!allowed) {
       return NextResponse.json(
         { error: "Measurement not found" },
         { status: 404 }
@@ -83,7 +93,7 @@ export async function PUT(request, { params }) {
 
     // Sanitize numeric measurement fields
     for (const key in measurementStrings) {
-      if (Object.prototype.hasOwnProperty.call(measurementStrings, key)) {
+      if (Object.prototype.hasOwnProperty.call(measurementStrings, key) && isMeasurementField(key)) {
         const value = measurementStrings[key];
         if (typeof value === "string" && value.trim() !== "") {
           const num = parseFloat(value);

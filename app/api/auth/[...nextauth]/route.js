@@ -7,6 +7,7 @@ import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { Role } from "@prisma/client";
+import { isRateLimited, clearRateLimit } from "@/app/lib/rate-limiter";
 
 // A helper function to create logs to keep the authorize function clean
 async function createLog(data) {
@@ -53,13 +54,31 @@ export const authOptions = {
           throw new Error("Login identifier is required.");
         }
 
+        // Brute-force protection: cap failed attempts per account identifier.
+        // OTP: 5 tries per 10 min (a 6-digit code is otherwise guessable).
+        // Password: 10 tries per 15 min.
+        const attemptKey = credentials?.otp ? `login_otp:${login}` : `login_pw:${login}`;
+        const attempt = credentials?.otp
+          ? await isRateLimited(attemptKey, 5, 10 * 60)
+          : await isRateLimited(attemptKey, 10, 15 * 60);
+        if (attempt.isLimited) {
+          if (credentials?.otp) {
+            // Burn the current code so the attacker must request a new one (also throttled).
+            await prisma.user.updateMany({
+              where: login.includes('@') ? { email: login } : { phone: login },
+              data: { otpCode: null, otpExpires: null },
+            });
+          }
+          throw new Error("Too many attempts. Please wait and try again.");
+        }
+
         // --- NEW: OTP LOGIN FLOW ---
         if (credentials?.otp) {
           const user = await prisma.user.findUnique({
             where: login.includes('@') ? { email: login } : { phone: login },
           });
 
-          if (!user || !user.otpCode || !user.otpExpires || user.otpExpires < new Date()) {
+          if (!user || user.status === 'DELETED' || !user.otpCode || !user.otpExpires || user.otpExpires < new Date()) {
             throw new Error("Invalid or expired OTP.");
           }
 
@@ -67,6 +86,8 @@ export const authOptions = {
           if (!isOtpValid) {
             throw new Error("Invalid OTP.");
           }
+
+          await clearRateLimit(attemptKey);
 
           // Clear OTP after successful login
           await prisma.user.update({
@@ -126,6 +147,8 @@ export const authOptions = {
           throw new Error("Invalid credentials.");
         }
 
+        await clearRateLimit(attemptKey);
+
         // Case 3: Successful login
         await createLog({
           userId: user.id,
@@ -141,6 +164,8 @@ export const authOptions = {
 
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days; renewed silently by device tokens
+    updateAge: 24 * 60 * 60,   // re-issue the cookie at most once a day
   },
 
   callbacks: {

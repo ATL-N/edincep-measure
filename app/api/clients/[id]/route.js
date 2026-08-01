@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/app/lib/prisma.js";
+import { requireStaff, canAccessClient } from "@/lib/authz";
 
 // Helper function to count non-null measurement fields in a session
 const countFilledMeasurements = (measurement) => {
@@ -30,13 +31,23 @@ const getClientInfo = (request) => {
 // GET single client with detailed measurements
 export async function GET(request, { params }) {
   try {
+    const { user, error } = await requireStaff(request, { requireActive: false });
+    if (error) return error;
+
     const { id } = await params;
+
+    if (!(await canAccessClient(user, id))) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
 
     const client = await prisma.client.findUnique({
       where: { id },
       include: {
         measurements: {
-          where: { status: 'ACTIVE' }, // <-- Exclude soft-deleted measurements
+          where: {
+            status: 'ACTIVE', // <-- Exclude soft-deleted measurements
+            ...(user.role === "DESIGNER" && { creatorId: user.id }),
+          },
           orderBy: { createdAt: "desc" },
         },
       },
@@ -53,6 +64,14 @@ export async function GET(request, { params }) {
     }));
 
     const processedClient = { ...client, measurements: processedMeasurements };
+
+    if (user.role === "DESIGNER") {
+      const link = await prisma.clientDesigner.findUnique({
+        where: { clientId_designerId: { clientId: id, designerId: user.id } },
+        select: { notes: true },
+      });
+      processedClient.notes = link?.notes ?? null;
+    }
 
     return NextResponse.json(processedClient);
   } catch (error) {
@@ -85,21 +104,31 @@ export async function PUT(request, { params }) {
     }
 
     const existingClient = await prisma.client.findUnique({ where: { id } });
-    if (!existingClient) {
+    if (!existingClient || !(await canAccessClient(currentUser, id))) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
-    const client = await prisma.client.update({
+    // Shared profile fields live on the client; notes are private per designer.
+    const isDesigner = currentUser.role === "DESIGNER";
+    const updated = await prisma.client.update({
       where: { id },
       data: {
         name,
         phone,
         email,
         address,
-        notes,
-        status,
+        ...(isDesigner ? {} : { notes }),
+        // Designers can't change a shared client's status here (use DELETE).
+        ...(isDesigner ? {} : { status }),
       },
     });
+    if (isDesigner && notes !== undefined) {
+      await prisma.clientDesigner.update({
+        where: { clientId_designerId: { clientId: id, designerId: currentUser.id } },
+        data: { notes },
+      });
+    }
+    const client = isDesigner ? { ...updated, notes: notes ?? null } : updated;
 
     const { ipAddress, os } = getClientInfo(request);
     await prisma.log.create({
@@ -143,15 +172,34 @@ export async function DELETE(request, { params }) {
     const { id } = await params;
 
     const existingClient = await prisma.client.findUnique({ where: { id } });
-    if (!existingClient) {
+    if (!existingClient || !(await canAccessClient(currentUser, id))) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
-    // 2. Update the client's status to DELETED
-    await prisma.client.update({
-      where: { id },
-      data: { status: 'DELETED' },
-    });
+    // 2. Remove the client.
+    // A designer only removes the client from THEIR list (and hides their own
+    // measurements). The client record is soft-deleted only when no other
+    // designer still works with them. Admins delete outright.
+    if (currentUser.role === "DESIGNER") {
+      await prisma.$transaction(async (tx) => {
+        await tx.clientDesigner.delete({
+          where: { clientId_designerId: { clientId: id, designerId: currentUser.id } },
+        });
+        await tx.measurement.updateMany({
+          where: { clientId: id, creatorId: currentUser.id },
+          data: { status: "DELETED" },
+        });
+        const remaining = await tx.clientDesigner.count({ where: { clientId: id } });
+        if (remaining === 0) {
+          await tx.client.update({ where: { id }, data: { status: "DELETED" } });
+        }
+      });
+    } else {
+      await prisma.client.update({
+        where: { id },
+        data: { status: 'DELETED' },
+      });
+    }
 
     const { ipAddress, os } = getClientInfo(request);
     await prisma.log.create({

@@ -26,6 +26,9 @@ export async function GET(request) {
       };
     }
 
+    // On shared clients, designers only count their own measurements.
+    const mine = user.role === "DESIGNER" ? { creatorId: user.id, status: "ACTIVE" } : {};
+
     const now = new Date();
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -43,22 +46,22 @@ export async function GET(request) {
       recentMeasurements,
     ] = await Promise.all([
       prisma.client.count({ where: whereClause }),
-      prisma.measurement.count({ where: { client: whereClause } }),
+      prisma.measurement.count({ where: { ...mine, client: whereClause } }),
       prisma.client.count({ where: { ...whereClause, createdAt: { gte: thisMonthStart } } }),
       prisma.client.count({ where: { ...whereClause, createdAt: { gte: lastMonthStart, lt: thisMonthStart } } }),
-      prisma.measurement.count({ where: { client: whereClause, createdAt: { gte: thisMonthStart } } }),
-      prisma.measurement.count({ where: { client: whereClause, createdAt: { gte: lastMonthStart, lt: thisMonthStart } } }),
+      prisma.measurement.count({ where: { ...mine, client: whereClause, createdAt: { gte: thisMonthStart } } }),
+      prisma.measurement.count({ where: { ...mine, client: whereClause, createdAt: { gte: lastMonthStart, lt: thisMonthStart } } }),
       prisma.measurement.groupBy({
         by: ['createdAt'],
         _count: { id: true },
-        where: { client: whereClause },
+        where: { ...mine, client: whereClause },
         orderBy: { createdAt: 'asc' },
       }),
       prisma.client.findMany({
         where: whereClause,
         include: {
           _count: {
-            select: { measurements: true },
+            select: { measurements: { where: mine } },
           },
         },
         orderBy: {
@@ -69,7 +72,7 @@ export async function GET(request) {
         take: 5,
       }),
       prisma.measurement.findMany({
-        where: { client: whereClause },
+        where: { ...mine, client: whereClause },
         include: {
           client: {
             select: { id: true, name: true },

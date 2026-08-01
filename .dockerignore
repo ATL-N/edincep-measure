@@ -1,0 +1,11 @@
+# Never bake secrets into the image: docker-compose passes .env at runtime.
+.env
+.env.*
+# Host-installed packages/builds must not overwrite the container's own
+# (npm ci inside the image builds native Prisma engines for Alpine).
+node_modules/
+.next/
+.git/
+# User uploads live in the uploads-data volume, not in the image.
+public/uploads/
+npm-debug.log*

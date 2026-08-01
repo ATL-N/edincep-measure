@@ -1,6 +1,39 @@
 // app/lib/rate-limiter.js
 import redis from "./redis";
 
+const memoryBuckets = globalThis.__rateLimitBuckets || new Map();
+globalThis.__rateLimitBuckets = memoryBuckets;
+
+function memoryRateLimit(identifier, limit, windowInSeconds) {
+  const now = Date.now();
+  const windowStart = now - windowInSeconds * 1000;
+  const hits = (memoryBuckets.get(identifier) || []).filter((t) => t > windowStart);
+  hits.push(now);
+  memoryBuckets.set(identifier, hits);
+
+  // Opportunistic cleanup so the map can't grow forever.
+  if (memoryBuckets.size > 10000) {
+    for (const [key, times] of memoryBuckets) {
+      if (!times.length || times[times.length - 1] <= windowStart) memoryBuckets.delete(key);
+    }
+  }
+
+  const isLimited = hits.length > limit;
+  return {
+    isLimited,
+    remaining: Math.max(0, limit - hits.length),
+    reset: new Date(hits[0] + windowInSeconds * 1000),
+  };
+}
+
+/** Resets a limiter key (e.g. after a successful login). */
+export async function clearRateLimit(identifier) {
+  memoryBuckets.delete(identifier);
+  if (redis) {
+    try { await redis.del(`rate_limit:${identifier}`); } catch {}
+  }
+}
+
 /**
  * Implements a sliding window rate limiter using Redis sorted sets.
  *
@@ -11,9 +44,10 @@ import redis from "./redis";
  *   the number of remaining requests, and the time when the limit will reset.
  */
 export async function isRateLimited(identifier, limit, windowInSeconds) {
-  // If redis is not configured (e.g. in local dev), bypass rate limiting.
+  // Without Redis (local dev / single instance), fall back to an in-memory
+  // window instead of disabling rate limiting entirely.
   if (!redis) {
-    return { isLimited: false, remaining: limit, reset: new Date() };
+    return memoryRateLimit(identifier, limit, windowInSeconds);
   }
 
   const key = `rate_limit:${identifier}`;

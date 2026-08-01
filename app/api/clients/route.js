@@ -18,8 +18,6 @@ export async function GET(request) {
     // 1. Authenticate the user using the session helper
     const user = await getCurrentUser(request);
 
-    console.log("User from session:", user);
-
     // 2. Authorize the user: check if they are logged in
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -30,8 +28,9 @@ export async function GET(request) {
     const search = searchParams.get("search");
     const status = searchParams.get("status");
     const sortBy = searchParams.get("sort");
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "12");
+    // Clamp pagination input so a client can't request unbounded pages.
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "12", 10) || 12));
     const offset = (page - 1) * limit;
 
     // 4. Build the 'where' clause based on user role
@@ -72,17 +71,22 @@ export async function GET(request) {
     }
 
     // 5. Build the 'orderBy' clause
-    let orderBy = {};
+    // A unique tie-breaker (id) keeps page boundaries stable, so paging
+    // through the list never skips or repeats a client.
+    let orderBy;
     switch (sortBy) {
       case "name":
-        orderBy = { name: "asc" };
+        orderBy = [{ name: "asc" }, { id: "asc" }];
         break;
       case "measurements":
-        orderBy = { measurements: { _count: "desc" } };
+        orderBy = [{ measurements: { _count: "desc" } }, { id: "asc" }];
+        break;
+      case "created":
+        orderBy = [{ createdAt: "asc" }, { id: "asc" }];
         break;
       case "recent":
       default:
-        orderBy = { updatedAt: "desc" };
+        orderBy = [{ updatedAt: "desc" }, { id: "asc" }];
         break;
     }
 
@@ -91,13 +95,31 @@ export async function GET(request) {
       prisma.client.findMany({
         where,
         include: {
+          // Designers only see their own measurements and notes on shared clients.
           measurements: {
+            where: {
+              status: "ACTIVE",
+              ...(user.role === "DESIGNER" && { creatorId: user.id }),
+            },
             orderBy: { createdAt: "desc" },
             take: 1,
           },
           _count: {
-            select: { measurements: true },
+            select: {
+              measurements: {
+                where: {
+                  status: "ACTIVE",
+                  ...(user.role === "DESIGNER" && { creatorId: user.id }),
+                },
+              },
+            },
           },
+          ...(user.role === "DESIGNER" && {
+            assignedDesigners: {
+              where: { designerId: user.id },
+              select: { notes: true },
+            },
+          }),
         },
         orderBy,
         skip: offset,
@@ -107,8 +129,16 @@ export async function GET(request) {
     ]);
 
     // 7. Return the successful response
+    const visibleClients =
+      user.role === "DESIGNER"
+        ? clients.map(({ assignedDesigners, ...c }) => ({
+            ...c,
+            notes: assignedDesigners?.[0]?.notes ?? null,
+          }))
+        : clients;
+
     return NextResponse.json({
-      clients,
+      clients: visibleClients,
       pagination: {
         page,
         limit,
@@ -182,37 +212,70 @@ export async function POST(request) {
       );
     }
 
-    // 5. Upsert User and Create Client in a transaction
-    const client = await prisma.$transaction(async (prisma) => {
-      // Step 5a: Find or create the user linked to this client
-      // We use the phone number as the unique identifier for clients who don't have emails
-      let clientUser = await prisma.user.findUnique({
-        where: { phone },
+    // Idempotency: the mobile app sends its own id and may retry after a
+    // dropped response. If this designer already owns that client, return it.
+    if (id) {
+      const existing = await prisma.client.findUnique({
+        where: { id },
+        include: { assignedDesigners: { where: { designerId }, select: { designerId: true } } },
       });
+      if (existing) {
+        if (existing.assignedDesigners.length > 0) {
+          const { assignedDesigners, ...rest } = existing;
+          return NextResponse.json(rest, { status: 200 });
+        }
+        return NextResponse.json({ error: "Client id already in use." }, { status: 409 });
+      }
+    }
 
-      if (clientUser) {
-        // If user exists, update their details
-        clientUser = await prisma.user.update({
-          where: { id: clientUser.id },
-          data: { 
-            name,
-            email: email || clientUser.email // Only update email if provided
-          },
+    // 5. Find-or-share the client.
+    // Clients are shared between designers (one client record per phone
+    // number), but measurements and private notes belong to each designer.
+    const { client, shared } = await prisma.$transaction(async (tx) => {
+      // 5a. Find or create the User account behind this client (keyed by phone).
+      let clientUser = await tx.user.findUnique({ where: { phone } });
+      if (!clientUser) {
+        clientUser = await tx.user.create({
+          data: { name, phone, email: email || null, role: "CLIENT" },
         });
-      } else {
-        // If user does not exist, create a new one
-        clientUser = await prisma.user.create({
+      } else if (!clientUser.name || (!clientUser.email && email)) {
+        // Only fill in blanks; never overwrite details another designer set.
+        clientUser = await tx.user.update({
+          where: { id: clientUser.id },
           data: {
-            name,
-            phone,
-            email: email || null,
-            role: 'CLIENT', // Assign CLIENT role
+            name: clientUser.name || name,
+            email: clientUser.email || email || null,
           },
         });
       }
 
-      // Step 5b: Create the client and associate with the designer and user
-      const newClient = await prisma.client.create({
+      // 5b. Does a client record already exist for this person?
+      const existing =
+        (await tx.client.findUnique({ where: { userId: clientUser.id } })) ||
+        (await tx.client.findFirst({
+          where: { phone, status: "ACTIVE" },
+          orderBy: { createdAt: "asc" },
+        }));
+
+      if (existing) {
+        // Share it: link this designer (idempotent) with their own notes.
+        await tx.clientDesigner.upsert({
+          where: { clientId_designerId: { clientId: existing.id, designerId } },
+          update: {},
+          create: { clientId: existing.id, designerId, notes: notes || null },
+        });
+        const revived =
+          existing.status === "ACTIVE"
+            ? existing
+            : await tx.client.update({
+                where: { id: existing.id },
+                data: { status: "ACTIVE" },
+              });
+        return { client: revived, shared: true };
+      }
+
+      // 5c. Brand-new client.
+      const newClient = await tx.client.create({
         data: {
           id: id || undefined, // Use provided ID or let Prisma generate a CUID
           name,
@@ -220,20 +283,14 @@ export async function POST(request) {
           email: email || null,
           address,
           dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-          notes,
           status: status || "ACTIVE",
-          user: {
-            connect: { id: clientUser.id },
-          },
+          user: { connect: { id: clientUser.id } },
           assignedDesigners: {
-            create: {
-              designerId: designerId,
-            },
+            create: { designerId, notes: notes || null },
           },
         },
       });
-
-      return newClient;
+      return { client: newClient, shared: false };
     });
 
     // Log the client creation event
@@ -241,7 +298,7 @@ export async function POST(request) {
     await prisma.log.create({
       data: {
         userId: user.id,
-        action: "CLIENT_CREATE",
+        action: shared ? "CLIENT_SHARED" : "CLIENT_CREATE",
         ipAddress,
         os,
         details: {
@@ -253,7 +310,12 @@ export async function POST(request) {
     });
 
     // 6. Return the newly created client
-    return NextResponse.json(client, { status: 201 });
+    // `shared: true` tells the app this client already existed (possibly under
+    // a different id than the one it sent) so it can re-point local records.
+    return NextResponse.json(
+      { ...client, notes: notes || null, shared, requestedId: id || null },
+      { status: shared ? 200 : 201 }
+    );
   } catch (error) {
     console.error("Error creating client:", error);
     if (error.code === "P2002") {

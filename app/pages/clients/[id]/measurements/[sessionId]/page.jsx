@@ -3,6 +3,8 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import PhotoReview from "@/components/PhotoReview";
+import OrderDesigns from "@/components/OrderDesigns";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -422,6 +424,11 @@ export default function MeasurementDetailPage() {
             )}
 
           </div>
+        </motion.div>
+
+        <motion.div variants={itemVariants} className="mb-8">
+          <PhotoReview measurementId={sessionId} unit={measurementUnit} />
+          <div className="mt-6"><OrderDesigns measurementId={sessionId} /></div>
         </motion.div>
 
         {session.notes && (

@@ -43,6 +43,7 @@ export async function middleware(req) {
     "/api/auth",
     "/measurements/fill",
     "/api/measurements/share",
+    "/api/health",
   ];
 
   const isPublicPath = publicPaths.some((path) => pathname.startsWith(path));
@@ -73,6 +74,11 @@ export async function middleware(req) {
         return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
       response = NextResponse.next();
+    } else if (!token && pathname.startsWith("/api")) {
+      // APIs must answer 401 JSON, not redirect to the HTML login page.
+      // (A redirect looked like a "200 OK" to the mobile app, so expired
+      // sessions silently returned no data.)
+      response = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     } else if (!token) {
       const loginUrl = new URL("/login", req.url);
       if (!pathname.startsWith("/login") && !pathname.startsWith("/signup")) {

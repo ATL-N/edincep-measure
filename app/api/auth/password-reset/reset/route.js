@@ -1,5 +1,6 @@
 // app/api/auth/password-reset/reset/route.js
 import { NextResponse } from "next/server";
+import { revokeAllDeviceTokens } from "@/lib/device-auth";
 import { prisma } from "@/app/lib/prisma";
 import bcrypt from "bcryptjs";
 
@@ -62,6 +63,9 @@ export async function POST(req) {
         passwordResetTokenExpires: null,
       },
     });
+
+    // A reset means the old password may be compromised: forget all devices.
+    await revokeAllDeviceTokens(user.id);
 
     return NextResponse.json(
       { message: "Password has been reset successfully." },

@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { MeasurementGuideButton, MeasurementGuideBanner } from "@/components/MeasurementGuide";
+import PhotoMeasure, { cmToUnit, uploadPhotos } from "@/components/PhotoMeasure";
+import { Camera } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Save,
@@ -159,6 +162,24 @@ export default function FillForm() {
 
   const displayUnitLabel = clientUnit === "CENTIMETER" ? "cm" : "in";
 
+  // Measure-from-photos state
+  const [showPhotoMeasure, setShowPhotoMeasure] = useState(false);
+  const [photoCapture, setPhotoCapture] = useState(null); // { photos, heightCm }
+  const [estimatedKeys, setEstimatedKeys] = useState(() => new Set());
+
+  const applyPhotoEstimates = ({ valuesCm, photos, heightCm }) => {
+    const filled = {};
+    for (const [key, cm] of Object.entries(valuesCm)) filled[key] = String(cmToUnit(cm, clientUnit));
+    setMeasurements((prev) => ({ ...prev, ...filled }));
+    setEstimatedKeys(new Set(Object.keys(filled)));
+    setPhotoCapture({ photos, heightCm });
+    setShowPhotoMeasure(false);
+    setPageMessage({
+      type: "info",
+      text: `${Object.keys(filled).length} measurements were filled in from your photos. Please check them before saving.`,
+    });
+  };
+
   // --- Unit Conversion Logic ---
   const convertToDisplay = (valueInInches) => {
     if (valueInInches === null || valueInInches === undefined || valueInInches === "") return "";
@@ -241,6 +262,12 @@ export default function FillForm() {
     // Allow empty string or numbers with up to two decimal places
     if (value === "" || /^-?\d*\.?\d{0,2}$/.test(value)) {
       setMeasurements((prev) => ({ ...prev, [fieldName]: value }));
+      setEstimatedKeys((prev) => {
+        if (!prev.has(fieldName)) return prev;
+        const next = new Set(prev);
+        next.delete(fieldName); // the person checked/edited it
+        return next;
+      });
     }
   };
 
@@ -276,9 +303,20 @@ export default function FillForm() {
         storageMeasurements[staticKey] = convertToStorage(measurements[fieldName]);
       }
 
+      // Upload the photos used for estimating, so the designer can see them.
+      let photoIds = [];
+      if (photoCapture?.photos?.length) {
+        try {
+          photoIds = await uploadPhotos(photoCapture.photos, `/api/measurements/share/${token}/photos`);
+        } catch (e) {
+          console.warn("Photo upload failed; saving measurements without photos", e);
+        }
+      }
+
       const body = {
         notes,
         ...storageMeasurements,
+        ...(photoIds.length ? { photoIds } : {}),
       };
 
       const url = `/api/measurements/share/${token}`;
@@ -422,6 +460,24 @@ export default function FillForm() {
         </motion.div>
 
         <div className="space-y-6">
+          <button
+            type="button"
+            onClick={() => setShowPhotoMeasure(true)}
+            className="w-full flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-left hover:bg-primary/15 transition-colors"
+          >
+            <Camera className="w-6 h-6 text-primary shrink-0" aria-hidden />
+            <span className="flex-1">
+              <span className="block font-semibold">
+                {photoCapture ? "Retake photos" : "No tape measure? Use 2 photos"}
+              </span>
+              <span className="block text-sm text-muted-foreground">
+                {photoCapture
+                  ? "Your photos will be sent to your designer with your measurements."
+                  : "Take a front and a side photo and we'll fill in most measurements for you to check."}
+              </span>
+            </span>
+          </button>
+          <MeasurementGuideBanner className="mb-4" />
           {Object.entries(measurementCategories).map(
             ([categoryKey, category]) => (
               <div
@@ -462,7 +518,18 @@ export default function FillForm() {
                                 className="bg-background/50 rounded-lg border border-border/50"
                               >
                                 <td className="py-3 px-4 font-medium text-sm rounded-l-lg w-1/2">
-                                  {measurement.name}
+                                  <span className="inline-flex items-center gap-1">
+                                    {measurement.name}
+                                    <MeasurementGuideButton fieldKey={fieldName} label={measurement.name} />
+                                    {estimatedKeys.has(fieldName) && (
+                                      <span
+                                        title="Estimated from your photos. Please check it."
+                                        className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300"
+                                      >
+                                        from photo
+                                      </span>
+                                    )}
+                                  </span>
                                   <p className="text-xs text-muted-foreground mt-1 max-w-xs">
                                     {measurement.note}
                                   </p>
@@ -529,6 +596,13 @@ export default function FillForm() {
           </motion.button>
         </div>
       </motion.div>
+      {showPhotoMeasure && (
+        <PhotoMeasure
+          unit={clientUnit}
+          onApply={applyPhotoEstimates}
+          onClose={() => setShowPhotoMeasure(false)}
+        />
+      )}
     </div>
   );
 }

@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/app/lib/prisma.js";
+import { isMeasurementField } from "@/lib/measurement-fields";
+import { requireStaff, canAccessClient } from "@/lib/authz";
 
 // Helper to get IP and OS from request
 const getClientInfo = (request) => {
@@ -201,13 +203,21 @@ export async function GET(request, { params }) {
     const { searchParams } = new URL(request.url);
     const format = searchParams.get("format");
 
+    const { user, error } = await requireStaff(request, { requireActive: false });
+    if (error) return error;
+
     const { id: clientId, sessionId } = await params;
+
+    if (!(await canAccessClient(user, clientId))) {
+      return NextResponse.json({ error: "Measurement session not found" }, { status: 404 });
+    }
 
     const session = await prisma.measurement.findFirst({
       where: {
         id: sessionId,
         clientId: clientId,
         status: "ACTIVE",
+        ...(user.role === "DESIGNER" && { creatorId: user.id }),
       },
       include: {
         client: {
@@ -227,14 +237,11 @@ export async function GET(request, { params }) {
       );
     }
 
-    // --- LOGGING ADDED ---
-    console.log("RAW SESSION DATA FROM DB:", session);
 
     const { client, ...sessionData } = session;
 
     // If format=raw is requested, return the flat data for the edit page
     if (format === "raw") {
-      console.log("RETURNING RAW DATA FOR EDIT FORM");
       return NextResponse.json({
         client: { name: client.name },
         session: sessionData,
@@ -258,7 +265,6 @@ export async function GET(request, { params }) {
       },
     };
 
-    console.log("RETURNING TRANSFORMED DATA FOR DETAILS PAGE:", responsePayload);
     return NextResponse.json(responsePayload);
   } catch (error) {
     console.error("Error fetching measurement session:", error);
@@ -375,7 +381,7 @@ export async function PUT(request, { params }) {
     const measurementData = {};
     for (const key in measurements) {
       // Skip read-only fields that might be in the body
-      if (key === 'id' || key === 'clientId' || key === 'createdAt' || key === 'updatedAt' || key === 'creatorId') {
+      if (!isMeasurementField(key)) {
         continue;
       }
       if (measurements[key] !== null && measurements[key] !== "") {

@@ -23,6 +23,9 @@ export async function GET(request) {
       };
     }
     
+    // On shared clients, designers only count their own measurements.
+    const mine = user.role === "DESIGNER" ? { creatorId: user.id, status: "ACTIVE" } : {};
+
     // --- Date Calculations ---
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
@@ -42,7 +45,7 @@ export async function GET(request) {
     ] = await Promise.all([
       prisma.client.count({ where: { ...whereClause, status: "ACTIVE" } }),
       prisma.client.count({ where: { ...whereClause, status: "ACTIVE", createdAt: { gte: oneMonthAgo } } }),
-      prisma.measurement.count({ where: { client: { ...whereClause, status: "ACTIVE" } } }),
+      prisma.measurement.count({ where: { ...mine, client: { ...whereClause, status: "ACTIVE" } } }),
       prisma.client.count({ where: { ...whereClause, status: "ACTIVE" } }),
       prisma.client.findMany({
         where: { ...whereClause, status: "ACTIVE" },
@@ -50,12 +53,13 @@ export async function GET(request) {
         orderBy: { updatedAt: "desc" },
         include: {
           measurements: {
+            where: mine,
             orderBy: { createdAt: "desc" },
             take: 1,
           },
         },
       }),
-      prisma.measurement.count({ where: { client: { ...whereClause, status: "ACTIVE" }, createdAt: { gte: oneWeekAgo } } }),
+      prisma.measurement.count({ where: { ...mine, client: { ...whereClause, status: "ACTIVE" }, createdAt: { gte: oneWeekAgo } } }),
       prisma.client.count({ where: { ...whereClause, status: "ACTIVE", createdAt: { gte: oneWeekAgo } } }),
     ]);
 

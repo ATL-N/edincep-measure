@@ -1,5 +1,6 @@
 // app/api/user/change-password/route.js
 import { NextResponse } from "next/server";
+import { revokeAllDeviceTokens } from "@/lib/device-auth";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/app/lib/prisma";
 import bcrypt from "bcryptjs";
@@ -71,6 +72,10 @@ export async function POST(request) {
         hashedPassword: hashedNewPassword,
       },
     });
+
+    // Sign out every other remembered device. The app re-registers the
+    // current device right after a successful change.
+    await revokeAllDeviceTokens(user.id);
 
     return NextResponse.json(
       { message: "Password updated successfully." },

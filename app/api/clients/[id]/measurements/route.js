@@ -3,7 +3,10 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session"; // Ensure this path points to your auth helper
 import { prisma } from "@/app/lib/prisma.js";
+import { isMeasurementField } from "@/lib/measurement-fields";
+import { attachPhotos } from "@/lib/photo-storage";
 import { RecordStatus } from "@prisma/client";
+import { canAccessClient } from "@/lib/authz";
 
 // Helper function to count non-null measurement fields in a session
 const countFilledMeasurements = (measurement) => {
@@ -66,7 +69,7 @@ export async function GET(request, { params }) {
       select: { name: true },
     });
 
-    if (!client) {
+    if (!client || !(await canAccessClient(user, clientId))) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
@@ -161,11 +164,23 @@ export async function POST(request, { params }) {
     // 5. Get the request body
     // const body = await request.json();
 
-    // 6. Get the request body and log it for debugging
+    // 6. Get the request body
     const body = await request.json();
-    console.log("Request body received:", JSON.stringify(body, null, 2));
-    console.log("Client ID from params:", clientId);
-    console.log("Current User:", currentUser);
+
+    // Idempotency: the mobile app supplies its own id and may retry a create
+    // whose response was lost. Return the existing record instead of failing.
+    if (body?.id) {
+      const existing = await prisma.measurement.findUnique({ where: { id: body.id } });
+      if (existing) {
+        if (existing.clientId === clientId && existing.creatorId === currentUser.id) {
+          return NextResponse.json(
+            { ...existing, totalMeasurementsCount: countFilledMeasurements(existing) },
+            { status: 200 }
+          );
+        }
+        return NextResponse.json({ error: "Measurement id already in use." }, { status: 409 });
+      }
+    }
 
     // 7. Validate required IDs first
     if (!clientId) {
@@ -192,6 +207,7 @@ export async function POST(request, { params }) {
       completionDeadline,
       materialImageUrl = "",
       designImageUrl = "",
+      photoIds, // photos taken with "measure from photos"
       localMaterialImageBytes, // IGNORE BYTES
       localDesignImageBytes, // IGNORE BYTES
       // Exclude these fields that shouldn't be in the create data
@@ -216,7 +232,7 @@ export async function POST(request, { params }) {
     // 9. Sanitize the measurement data
     const sanitizedMeasurements = {};
     for (const key in measurementStrings) {
-      if (Object.prototype.hasOwnProperty.call(measurementStrings, key)) {
+      if (Object.prototype.hasOwnProperty.call(measurementStrings, key) && isMeasurementField(key)) {
         const value = measurementStrings[key];
         if (typeof value === "string" && value.trim() !== "") {
           const num = parseFloat(value);
@@ -247,16 +263,13 @@ export async function POST(request, { params }) {
       ...sanitizedMeasurements,
     };
 
-    // 11. Final validation and logging
-    console.log(
-      "Final measurement data:",
-      JSON.stringify(measurementData, null, 2)
-    );
-
     // 12. Create the new measurement record
     const newMeasurement = await prisma.measurement.create({
       data: measurementData,
     });
+
+    // Attach photos this designer took for this client (measure from photos).
+    await attachPhotos(photoIds, newMeasurement.id, { uploadedById: currentUser.id, clientId });
 
     // 13. Calculate totalMeasurementsCount for the response
     const totalMeasurementsCount2 = countFilledMeasurements(newMeasurement);
@@ -280,14 +293,14 @@ export async function POST(request, { params }) {
     return NextResponse.json(
       {
         ...newMeasurement,
-        totalMeasurementsCount2,
+        totalMeasurementsCount: totalMeasurementsCount2,
       },
       { status: 201 }
     );
   } catch (error) {
     console.error("Error creating measurement:", error);
     return NextResponse.json(
-      { error: "Failed to create measurement", details: error.message },
+      { error: "Failed to create measurement" },
       { status: 500 }
     );
   }
@@ -343,7 +356,7 @@ export async function PUT(request, { params }) {
 
     // Sanitize numeric fields
     for (const key in measurementStrings) {
-      if (Object.prototype.hasOwnProperty.call(measurementStrings, key)) {
+      if (Object.prototype.hasOwnProperty.call(measurementStrings, key) && isMeasurementField(key)) {
         const value = measurementStrings[key];
         if (typeof value === "string" && value.trim() !== "") {
           const num = parseFloat(value);
@@ -401,7 +414,7 @@ export async function PUT(request, { params }) {
     }
     console.error("Error updating measurement:", error);
     return NextResponse.json(
-      { error: "Failed to update measurement", details: error.message },
+      { error: "Failed to update measurement" },
       { status: 500 }
     );
   }

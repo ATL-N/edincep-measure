@@ -1,6 +1,7 @@
 // @/app/api/measurements/[id]/pdf/route.js
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
+import { canAccessClient } from "@/lib/authz";
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
 import { prisma } from "@/app/lib/prisma.js";
@@ -27,7 +28,14 @@ export async function GET(request, { params }) {
       }),
     ]);
 
-    if (!measurement) {
+    const allowed =
+      measurement &&
+      (user.role === "ADMIN" ||
+        (user.role === "DESIGNER" &&
+          measurement.creatorId === user.id &&
+          (await canAccessClient(user, measurement.clientId))));
+
+    if (!allowed) {
       return NextResponse.json({ error: "Measurement not found" }, { status: 404 });
     }
 
