@@ -46,11 +46,7 @@ ENV NODE_ENV=production
 
 
 RUN apk update && \
-
-
     apk add --no-cache postgresql-client dumb-init curl && \
-
-
     rm -rf /var/cache/apk/*
 
 

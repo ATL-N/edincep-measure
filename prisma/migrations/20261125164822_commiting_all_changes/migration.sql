@@ -1,15 +1,26 @@
--- CreateEnum
-CREATE TYPE "FinanceCategoryType" AS ENUM ('MATERIAL', 'TOOL', 'BILL', 'REVENUE', 'LABOUR', 'MARKETING', 'RENT', 'OTHER');
+-- Brings the migration history in line with tables that production already
+-- has (they were created earlier by `prisma db push`). Every step is skipped
+-- when the object already exists, so this works on a fresh database and on
+-- production alike.
 
 -- CreateEnum
-CREATE TYPE "TransactionType" AS ENUM ('REVENUE', 'EXPENSE', 'USAGE');
+DO $$ BEGIN
+    CREATE TYPE "FinanceCategoryType" AS ENUM ('MATERIAL', 'TOOL', 'BILL', 'REVENUE', 'LABOUR', 'MARKETING', 'RENT', 'OTHER');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- CreateEnum
+DO $$ BEGIN
+    CREATE TYPE "TransactionType" AS ENUM ('REVENUE', 'EXPENSE', 'USAGE');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AlterTable
-ALTER TABLE "User" ADD COLUMN     "otpCode" TEXT,
-ADD COLUMN     "otpExpires" TIMESTAMP(3);
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "otpCode" TEXT,
+ADD COLUMN IF NOT EXISTS "otpExpires" TIMESTAMP(3);
 
 -- CreateTable
-CREATE TABLE "finance_categories" (
+CREATE TABLE IF NOT EXISTS "finance_categories" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "type" "FinanceCategoryType" NOT NULL,
@@ -24,7 +35,7 @@ CREATE TABLE "finance_categories" (
 );
 
 -- CreateTable
-CREATE TABLE "inventory_stocks" (
+CREATE TABLE IF NOT EXISTS "inventory_stocks" (
     "id" TEXT NOT NULL,
     "categoryId" TEXT NOT NULL,
     "designerId" TEXT NOT NULL,
@@ -38,7 +49,7 @@ CREATE TABLE "inventory_stocks" (
 );
 
 -- CreateTable
-CREATE TABLE "transactions" (
+CREATE TABLE IF NOT EXISTS "transactions" (
     "id" TEXT NOT NULL,
     "type" "TransactionType" NOT NULL,
     "categoryId" TEXT NOT NULL,
@@ -55,7 +66,7 @@ CREATE TABLE "transactions" (
 );
 
 -- CreateTable
-CREATE TABLE "job_costings" (
+CREATE TABLE IF NOT EXISTS "job_costings" (
     "id" TEXT NOT NULL,
     "transactionId" TEXT NOT NULL,
     "clientId" TEXT NOT NULL,
@@ -67,7 +78,7 @@ CREATE TABLE "job_costings" (
 );
 
 -- CreateTable
-CREATE TABLE "client_groups" (
+CREATE TABLE IF NOT EXISTS "client_groups" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "designerId" TEXT NOT NULL,
@@ -78,7 +89,7 @@ CREATE TABLE "client_groups" (
 );
 
 -- CreateTable
-CREATE TABLE "client_group_members" (
+CREATE TABLE IF NOT EXISTS "client_group_members" (
     "groupId" TEXT NOT NULL,
     "clientId" TEXT NOT NULL,
 
@@ -86,43 +97,76 @@ CREATE TABLE "client_group_members" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "finance_categories_name_designerId_type_key" ON "finance_categories"("name", "designerId", "type");
+CREATE UNIQUE INDEX IF NOT EXISTS "finance_categories_name_designerId_type_key" ON "finance_categories"("name", "designerId", "type");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "inventory_stocks_categoryId_key" ON "inventory_stocks"("categoryId");
+CREATE UNIQUE INDEX IF NOT EXISTS "inventory_stocks_categoryId_key" ON "inventory_stocks"("categoryId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "client_groups_name_designerId_key" ON "client_groups"("name", "designerId");
+CREATE UNIQUE INDEX IF NOT EXISTS "client_groups_name_designerId_key" ON "client_groups"("name", "designerId");
 
 -- AddForeignKey
-ALTER TABLE "finance_categories" ADD CONSTRAINT "finance_categories_designerId_fkey" FOREIGN KEY ("designerId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "finance_categories" ADD CONSTRAINT "finance_categories_designerId_fkey" FOREIGN KEY ("designerId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "inventory_stocks" ADD CONSTRAINT "inventory_stocks_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "finance_categories"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "inventory_stocks" ADD CONSTRAINT "inventory_stocks_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "finance_categories"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "inventory_stocks" ADD CONSTRAINT "inventory_stocks_designerId_fkey" FOREIGN KEY ("designerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "inventory_stocks" ADD CONSTRAINT "inventory_stocks_designerId_fkey" FOREIGN KEY ("designerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "transactions" ADD CONSTRAINT "transactions_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "finance_categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "transactions" ADD CONSTRAINT "transactions_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "finance_categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "transactions" ADD CONSTRAINT "transactions_designerId_fkey" FOREIGN KEY ("designerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "transactions" ADD CONSTRAINT "transactions_designerId_fkey" FOREIGN KEY ("designerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "job_costings" ADD CONSTRAINT "job_costings_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "job_costings" ADD CONSTRAINT "job_costings_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "job_costings" ADD CONSTRAINT "job_costings_measurementId_fkey" FOREIGN KEY ("measurementId") REFERENCES "measurements"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "job_costings" ADD CONSTRAINT "job_costings_measurementId_fkey" FOREIGN KEY ("measurementId") REFERENCES "measurements"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "job_costings" ADD CONSTRAINT "job_costings_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "transactions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "job_costings" ADD CONSTRAINT "job_costings_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "transactions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "client_groups" ADD CONSTRAINT "client_groups_designerId_fkey" FOREIGN KEY ("designerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "client_groups" ADD CONSTRAINT "client_groups_designerId_fkey" FOREIGN KEY ("designerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "client_group_members" ADD CONSTRAINT "client_group_members_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "client_group_members" ADD CONSTRAINT "client_group_members_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "client_group_members" ADD CONSTRAINT "client_group_members_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "client_groups"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "client_group_members" ADD CONSTRAINT "client_group_members_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "client_groups"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

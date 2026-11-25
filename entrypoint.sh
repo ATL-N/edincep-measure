@@ -22,9 +22,14 @@ echo "Database is ready."
 
 # 2. Run database migrations
 echo "Running database migrations..."
+# This migration failed once on databases whose finance tables had been created
+# by `prisma db push`; it has since been made safe to re-run. Clear the failed
+# mark so it can be applied again (does nothing when it isn't marked failed).
+./node_modules/.bin/prisma migrate resolve --rolled-back 20261125164822_commiting_all_changes >/dev/null 2>&1 || true
 ./node_modules/.bin/prisma migrate deploy
-echo "Pushing database schema updates..."
-./node_modules/.bin/prisma db push --accept-data-loss
+# Note: `prisma db push --accept-data-loss` was removed. Every schema change now
+# has a migration, and db push could silently drop columns (and their data)
+# whenever the schema and database disagreed.
 
 # 3. Seed the database if needed
 echo "Seeding database..."
